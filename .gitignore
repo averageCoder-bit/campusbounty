@@ -1,0 +1,64 @@
+
+# ==========================================
+# CampusBounty - BlockForge
+# BCC 2026 x Binance Academy Hackathon
+# ==========================================
+
+# Node.js dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
+coverage/
+*.tsbuildinfo
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Python packaging
+*.egg-info/
+.eggs/
+.pytest_cache/
+
+# IDE settings
+.vscode/
+.idea/
+
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+
+# Solidity / contract build artifacts
+artifacts/
+cache/
+out/
+broadcast/
+
+# Local wallet and credentials
+*.pem
+*.key
