@@ -19,6 +19,17 @@ const config: Phaser.Types.Core.GameConfig = {
         antialias: false,
     },
 
+    physics: {
+        default: "arcade",
+        arcade: {
+            gravity: {
+                x: 0,
+                y: 0,
+            },
+            debug: false,
+        },
+    },
+
     // Responsive scaling
     scale: {
         mode: Scale.FIT,

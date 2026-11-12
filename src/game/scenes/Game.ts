@@ -1,36 +1,55 @@
-import { EventBus } from '../EventBus';
-import { Scene } from 'phaser';
+import * as Phaser from "phaser";
+import { EventBus } from "../EventBus";
+import { Player } from "../entities/Player";
+import { TopDownDepthSystem } from "../systems/TopDownDepthSystem";
+import { buildQuestHall, HALL } from "../world/QuestHallMap";
 
-export class Game extends Scene
-{
-    camera: Phaser.Cameras.Scene2D.Camera;
-    background: Phaser.GameObjects.Image;
-    gameText: Phaser.GameObjects.Text;
+/** G2.1: playable top-down Quest Hall, preserving the existing "Game" scene key. */
+export class Game extends Phaser.Scene {
+    private player?: Player;
+    private readonly depthSystem = new TopDownDepthSystem();
 
-    constructor ()
-    {
-        super('Game');
+    constructor() {
+        super("Game"); // MainMenu currently calls this.scene.start("Game").
     }
 
-    create ()
-    {
-        this.camera = this.cameras.main;
-        this.camera.setBackgroundColor(0x00ff00);
+    create(): void {
+        this.cameras.main.setBackgroundColor("#08111F");
+        this.cameras.main.fadeIn(250, 8, 17, 31);
+        this.physics.world.setBounds(
+            HALL.walkable.x,
+            HALL.walkable.y,
+            HALL.walkable.width,
+            HALL.walkable.height,
+        );
 
-        this.background = this.add.image(512, 384, 'background');
-        this.background.setAlpha(0.5);
+        const obstacles = buildQuestHall(this);
+        this.player = new Player(this, HALL.spawn.x, HALL.spawn.y);
+        this.depthSystem.register(this.player.sprite);
+        this.physics.add.collider(this.player.sprite, obstacles);
 
-        this.gameText = this.add.text(512, 384, 'Make something fun!\nand share it with us:\nsupport@phaser.io', {
-            fontFamily: 'Arial Black', fontSize: 38, color: '#ffffff',
-            stroke: '#000000', strokeThickness: 8,
-            align: 'center'
-        }).setOrigin(0.5).setDepth(100);
+        this.add
+            .text(HALL.width / 2, 734, "WASD / ARROWS  MOVE     ESC  MENU", {
+                fontFamily: '"Press Start 2P", monospace',
+                fontSize: "12px",
+                color: "#94A3B8",
+            })
+            .setOrigin(0.5)
+            .setDepth(100);
 
-        EventBus.emit('current-scene-ready', this);
+        const backToMenu = () => this.scene.start("MainMenu");
+        this.input.keyboard?.on("keydown-ESC", backToMenu);
+        this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+            this.input.keyboard?.off("keydown-ESC", backToMenu);
+            this.depthSystem.destroy();
+            this.player = undefined;
+        });
+
+        EventBus.emit("current-scene-ready", this);
     }
 
-    changeScene ()
-    {
-        this.scene.start('GameOver');
+    update(): void {
+        this.player?.update();
+        this.depthSystem.update();
     }
 }
