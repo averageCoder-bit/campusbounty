@@ -14,6 +14,7 @@ export interface MenuOverlayOptions {
     avatarTextureKey?: string;
     onPauseChanged?: (paused: boolean) => void;
     onReturnToMenu?: () => void;
+    canToggleSettings?: () => boolean;
 }
 
 const C = {
@@ -330,6 +331,10 @@ export class MenuOverlay {
 
     openSettings(): void {
         if (this.destroyed || this.opened) return;
+
+        // Prevent Settings from interrupting NPC conversations.
+        if (this.options.canToggleSettings?.() === false) return;
+
         this.opened = true;
         this.modal.setVisible(true);
         this.refreshAudio();

@@ -1,27 +1,34 @@
 import * as Phaser from "phaser";
 import { EventBus } from "../EventBus";
 import { Player } from "../entities/Player";
+import { ByteProximity } from "../entities/ByteProximity";
 import { TopDownDepthSystem } from "../systems/TopDownDepthSystem";
 import { MouseLeadCamera } from "../systems/MouseLeadCamera";
 import { buildQuestHall, HALL } from "../world/QuestHallMap";
 import { MenuOverlay } from "../ui/MenuOverlay";
+import { ByteDialogue } from "../ui/ByteDialogue";
 
 /**
  * CampusBounty — Quest Hall
  *
  * Features:
- * - Eight-direction player movement
- * - Arcade Physics collisions
+ * - Eight-direction movement
+ * - World collisions
  * - Dynamic depth sorting
- * - Cursor-driven camera look-ahead
- * - Independent screen-fixed HUD
- * - XP progression interface
- * - ESC pause and settings menu
+ * - Mouse-leading camera
+ * - Independent player HUD
+ * - XP and settings overlay
+ * - Byte NPC proximity interaction
+ * - Full-width animated dialogue
+ * - Walk-away dialogue dismissal
  */
 export class Game extends Phaser.Scene {
     private player?: Player;
     private menuOverlay?: MenuOverlay;
     private mouseLead?: MouseLeadCamera;
+
+    private byteProximity?: ByteProximity;
+    private byteDialogue?: ByteDialogue;
 
     private readonly depthSystem = new TopDownDepthSystem();
 
@@ -85,13 +92,20 @@ export class Game extends Phaser.Scene {
         );
 
         // ==========================================
-        // 6. INDEPENDENT HUD CAMERA
+        // 6. BYTE PROXIMITY INTERACTION
         // ==========================================
 
-        // Capture all existing world objects.
+        // Byte is already rendered in QuestHallMap.
+        // This system handles proximity and the E prompt.
+
+        this.byteProximity = new ByteProximity(this);
+
+        // ==========================================
+        // 7. INDEPENDENT HUD CAMERA
+        // ==========================================
+
         const worldObjects = [...this.children.list];
 
-        // Separate camera for UI elements.
         const uiCamera = this.cameras.add(
             0,
             0,
@@ -104,18 +118,18 @@ export class Game extends Phaser.Scene {
         uiCamera.setZoom(1);
         uiCamera.setScroll(0, 0);
 
-        // Don't draw the world twice.
+        // Avoid rendering world objects twice.
         uiCamera.ignore(worldObjects);
 
         // ==========================================
-        // 7. CONTROL HINTS
+        // 8. CONTROL HINTS
         // ==========================================
 
         const controlsHint = this.add
             .text(
                 HALL.width / 2,
                 734,
-                "WASD / ARROWS MOVE   MOUSE LOOK   ESC SETTINGS",
+                "WASD MOVE   E TALK   MOUSE LOOK   ESC SETTINGS",
                 {
                     fontFamily: '"Press Start 2P", monospace',
                     fontSize: "11px",
@@ -126,15 +140,17 @@ export class Game extends Phaser.Scene {
             .setScrollFactor(0)
             .setDepth(100);
 
-        // Only the UI camera should display this.
         worldCamera.ignore(controlsHint);
 
         // ==========================================
-        // 8. PLAYER HUD / SETTINGS
+        // 9. PLAYER HUD / SETTINGS
         // ==========================================
 
         this.menuOverlay = new MenuOverlay(this, {
             avatarTextureKey: this.player.sprite.texture.key,
+
+            // Settings cannot open during Byte's dialogue.
+            canToggleSettings: () => !this.byteDialogue?.isOpen,
 
             progress: {
                 displayName: "STUDENT",
@@ -144,10 +160,12 @@ export class Game extends Phaser.Scene {
             },
 
             onPauseChanged: (paused: boolean) => {
-                // Stop cursor-driven camera updates.
+                // Only Settings should pause the camera.
                 this.mouseLead?.setEnabled(!paused);
 
                 if (paused) {
+                    this.byteProximity?.hide();
+
                     this.player?.sprite.setVelocity(0, 0);
 
                     this.physics.world?.pause();
@@ -163,62 +181,142 @@ export class Game extends Phaser.Scene {
             },
 
             onReturnToMenu: () => {
-                // MenuOverlay closes settings first,
-                // restoring the paused game systems.
                 this.scene.start("MainMenu");
             },
         });
 
-        // Prevent the world camera from rendering
-        // the XP HUD and settings overlay.
         worldCamera.ignore(this.menuOverlay.getCameraObjects());
 
         // ==========================================
-        // 9. SCENE CLEANUP
+        // 10. BYTE DIALOGUE SYSTEM
+        // ==========================================
+
+        this.byteDialogue = new ByteDialogue(this, {
+            typingSpeedMs: 27,
+
+            onOpenChanged: (open: boolean) => {
+                // Hide bottom control hints during dialogue.
+                controlsHint.setVisible(!open);
+
+                // Hide the E prompt while Byte is talking.
+                if (open) {
+                    this.byteProximity?.hide();
+                }
+
+                // IMPORTANT:
+                // Do NOT disable player movement or mouse-look.
+                // Dialogue is non-modal.
+            },
+        });
+
+        worldCamera.ignore(this.byteDialogue.getCameraObjects());
+
+        // ==========================================
+        // 11. SCENE CLEANUP
         // ==========================================
 
         this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+            // NPC interaction and dialogue.
+            this.byteDialogue?.destroy();
+            this.byteDialogue = undefined;
+
+            this.byteProximity?.destroy();
+            this.byteProximity = undefined;
+
+            // Player HUD.
             this.menuOverlay?.destroy();
             this.menuOverlay = undefined;
 
+            // Mouse-leading camera.
             this.mouseLead?.destroy();
             this.mouseLead = undefined;
 
+            // Restore shared animation state.
             this.anims.resumeAll();
             this.tweens.resumeAll();
             this.time.paused = false;
 
+            // Gameplay entities.
             this.depthSystem.destroy();
 
             this.player?.destroy();
             this.player = undefined;
 
-            // Remove the independent HUD camera.
+            // Remove the additional UI camera.
             if (this.cameras.cameras.includes(uiCamera)) {
                 this.cameras.remove(uiCamera);
             }
-
-            // No physics.world.resume() during shutdown.
         });
 
         // ==========================================
-        // 10. REACT EVENT
+        // 12. REACT EVENT
         // ==========================================
 
         EventBus.emit("current-scene-ready", this);
     }
 
     update(_time: number, delta: number): void {
-        // Disable movement and mouse-look during settings.
+        // ==========================================
+        // 1. SETTINGS PAUSE
+        // ==========================================
+
+        // Settings remain a hard pause.
         if (this.menuOverlay?.isOpen) {
             return;
         }
 
+        // ==========================================
+        // 2. NORMAL GAMEPLAY
+        // ==========================================
+
+        // Always allow movement, even during dialogue.
         this.player?.update();
 
+        // Keep player depth sorting active.
         this.depthSystem.update();
 
-        // Smooth camera look-ahead.
+        // Keep mouse-leading camera active.
         this.mouseLead?.update(delta);
+
+        // Require all NPC components.
+        if (!this.player || !this.byteProximity || !this.byteDialogue) {
+            return;
+        }
+
+        // ==========================================
+        // 3. BYTE DIALOGUE
+        // ==========================================
+
+        if (this.byteDialogue.isOpen) {
+            // Hide and disable the E prompt while talking.
+            this.byteProximity.update(this.player.sprite, false, () => {});
+
+            // Automatically close when the player
+            // walks outside Byte's interaction area.
+            //
+            // The extra 12px is exit tolerance to
+            // avoid flickering near the boundary.
+            const stillNearby = this.byteProximity.isInRange(
+                this.player.sprite,
+                12,
+            );
+
+            if (!stillNearby) {
+                this.byteDialogue.close();
+            } else {
+                // Continue typewriter animation.
+                this.byteDialogue.update(delta);
+            }
+
+            return;
+        }
+
+        // ==========================================
+        // 4. BYTE PROXIMITY CHECK
+        // ==========================================
+
+        this.byteProximity.update(this.player.sprite, true, () => {
+            this.byteDialogue?.open();
+        });
     }
 }
