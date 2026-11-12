@@ -1,0 +1,1072 @@
+{
+  "version": "g3.8.1",
+  "lessons": {
+    "cs-01-bits": {
+      "id": "cs-01-bits",
+      "unitId": "cs-computing",
+      "title": "Bits and Binary",
+      "subtitle": "CS  /  FOUNDATIONS  /  01",
+      "pages": [
+        {
+          "heading": "Everything is data",
+          "body": "Computers represent information as patterns of bits. A bit has two states, 0 or 1. The meaning of a bit pattern depends on its encoding.",
+          "exampleTitle": "A four-bit pattern",
+          "example": "1010 represents ten when interpreted as an unsigned binary number. It might mean something else under another agreed encoding.",
+          "takeaway": "Bits have no meaning until interpreted."
+        },
+        {
+          "heading": "Place value matters",
+          "body": "In binary, place values grow as powers of two from right to left: 1, 2, 4, 8, 16, ...",
+          "exampleTitle": "Convert 1101",
+          "example": "1×8 + 1×4 + 0×2 + 1×1 = 13.",
+          "takeaway": "Read a binary number from rightmost place value."
+        }
+      ],
+      "practice": {
+        "id": "cs01-pr",
+        "kind": "choice",
+        "title": "Warm-up",
+        "prompt": "Which is a bit?",
+        "options": [
+          "An image file",
+          "A value that is 0 or 1",
+          "A folder"
+        ],
+        "answerIndex": 1,
+        "explanation": "A bit stores a binary state.",
+        "context": "",
+        "hint": "Look for the evidence that directly answers the question."
+      },
+      "assessment": [
+        {
+          "id": "cs01-a",
+          "kind": "trace",
+          "title": "Binary to decimal",
+          "prompt": "Convert 1011 (base 2) to decimal.",
+          "context": "8 + 0 + 2 + 1",
+          "options": [
+            "11",
+            "9",
+            "13"
+          ],
+          "answerIndex": 0,
+          "explanation": "1011 = 8 + 2 + 1 = 11.",
+          "hint": "Execute each statement in order; do not skip reassignment."
+        },
+        {
+          "id": "cs01-b",
+          "kind": "choice",
+          "title": "Encoding",
+          "prompt": "Why can the same bytes represent different things?",
+          "options": [
+            "Because interpretation depends on the agreed encoding",
+            "Because memory changes randomly",
+            "Because all bytes are letters"
+          ],
+          "answerIndex": 0,
+          "explanation": "An encoding or data type determines interpretation.",
+          "context": "",
+          "hint": "Look for the evidence that directly answers the question."
+        },
+        {
+          "id": "cs01-c",
+          "kind": "fill",
+          "title": "Quick conversion",
+          "prompt": "Enter the decimal value of binary 1001.",
+          "accepted": [
+            "9"
+          ],
+          "explanation": "8 + 1 = 9.",
+          "context": "",
+          "hint": "Enter a short value or code fragment. Capitalization and extra spaces do not matter."
+        }
+      ],
+      "isCapstone": false,
+      "minScore": 3,
+      "xpReward": 30
+    },
+    "cs-02-io": {
+      "id": "cs-02-io",
+      "unitId": "cs-computing",
+      "title": "Input, Process, Output",
+      "subtitle": "CS  /  FOUNDATIONS  /  02",
+      "pages": [
+        {
+          "heading": "The program pipeline",
+          "body": "Many programs take input, apply a set of operations, and produce output. Identify each part to understand and debug the system.",
+          "exampleTitle": "Campus check-in",
+          "example": "Input: student ID. Process: validate enrollment. Output: allowed or rejected.",
+          "takeaway": "Separate received data from computed results."
+        },
+        {
+          "heading": "State and side effects",
+          "body": "Output can be printed text, a saved record, or a changed screen. Side effects are observable changes beyond simply returning a value.",
+          "exampleTitle": "A calculator",
+          "example": "Input 2 and 3 -> addition -> output 5. Saving 5 to a file is an additional side effect.",
+          "takeaway": "Return values and external side effects are different."
+        }
+      ],
+      "practice": {
+        "id": "cs02-pr",
+        "kind": "sequence",
+        "title": "Order the steps",
+        "prompt": "Arrange a basic calculator pipeline.",
+        "steps": [
+          "Read two numbers",
+          "Add the numbers",
+          "Display the sum"
+        ],
+        "explanation": "A calculation cannot add numbers before receiving them.",
+        "hint": "Start at the earliest required action and place the dependent action last."
+      },
+      "assessment": [
+        {
+          "id": "cs02-a",
+          "kind": "choice",
+          "title": "Identify input",
+          "prompt": "In a login form, which item is input?",
+          "options": [
+            "User's entered email",
+            "The 'Welcome' screen",
+            "An access decision"
+          ],
+          "answerIndex": 0,
+          "explanation": "User-provided data enters the system as input.",
+          "context": "",
+          "hint": "Look for the evidence that directly answers the question."
+        },
+        {
+          "id": "cs02-b",
+          "kind": "sequence",
+          "title": "Trace processing",
+          "prompt": "Order a simple temperature converter.",
+          "steps": [
+            "Read Celsius value",
+            "Compute C × 9/5 + 32",
+            "Display Fahrenheit value"
+          ],
+          "explanation": "Receive, transform, present.",
+          "hint": "Start at the earliest required action and place the dependent action last."
+        },
+        {
+          "id": "cs02-c",
+          "kind": "choice",
+          "title": "Side effects",
+          "prompt": "Which action changes something outside a function?",
+          "options": [
+            "Returning 7",
+            "Saving a result to a database",
+            "Computing 2 + 5 locally"
+          ],
+          "answerIndex": 1,
+          "explanation": "Writing to persistent storage is a side effect.",
+          "context": "",
+          "hint": "Look for the evidence that directly answers the question."
+        }
+      ],
+      "isCapstone": false,
+      "minScore": 3,
+      "xpReward": 30
+    },
+    "cs-03-algorithms": {
+      "id": "cs-03-algorithms",
+      "unitId": "cs-computing",
+      "title": "Algorithms and Pseudocode",
+      "subtitle": "CS  /  FOUNDATIONS  /  03",
+      "pages": [
+        {
+          "heading": "A finite method",
+          "body": "An algorithm is a clear sequence of finite steps for solving a problem. Pseudocode describes those steps without requiring exact programming-language syntax.",
+          "exampleTitle": "Search a list",
+          "example": "Compare each item with the target. If equal, return its position. If no match remains, report not found.",
+          "takeaway": "Algorithms should specify inputs, outputs, and termination."
+        },
+        {
+          "heading": "Order and correctness",
+          "body": "A correct algorithm must handle valid inputs reliably, including edge cases. Steps may depend on earlier steps.",
+          "exampleTitle": "Average score",
+          "example": "Read scores -> compute total -> divide by number of scores (after checking count > 0).",
+          "takeaway": "Check special cases before using assumptions."
+        }
+      ],
+      "practice": {
+        "id": "cs03-pr",
+        "kind": "sequence",
+        "title": "Algorithm ordering",
+        "prompt": "Arrange steps to find a maximum value.",
+        "steps": [
+          "Initialize best with first item",
+          "Compare subsequent items and update best",
+          "Return best after all comparisons"
+        ],
+        "explanation": "You must have an initial candidate before comparisons.",
+        "hint": "Start at the earliest required action and place the dependent action last."
+      },
+      "assessment": [
+        {
+          "id": "cs03-a",
+          "kind": "choice",
+          "title": "Termination",
+          "prompt": "Why must an algorithm terminate for finite valid input?",
+          "options": [
+            "So it eventually returns a result",
+            "So it avoids all loops",
+            "So it never handles errors"
+          ],
+          "answerIndex": 0,
+          "explanation": "A terminating process reaches a finite outcome.",
+          "context": "",
+          "hint": "Look for the evidence that directly answers the question."
+        },
+        {
+          "id": "cs03-b",
+          "kind": "sequence",
+          "title": "Find a target",
+          "prompt": "Order a basic linear search.",
+          "steps": [
+            "Start at the first item",
+            "Compare each item to the target",
+            "Return match or not found"
+          ],
+          "explanation": "Compare before returning a match.",
+          "hint": "Start at the earliest required action and place the dependent action last."
+        },
+        {
+          "id": "cs03-c",
+          "kind": "choice",
+          "title": "Edge case",
+          "prompt": "What should a program check before averaging a list?",
+          "options": [
+            "Whether the list is empty",
+            "Whether the list is sorted",
+            "Whether the list uses strings"
+          ],
+          "answerIndex": 0,
+          "explanation": "Dividing by the length of an empty list would divide by zero.",
+          "context": "",
+          "hint": "Look for the evidence that directly answers the question."
+        }
+      ],
+      "isCapstone": false,
+      "minScore": 3,
+      "xpReward": 30
+    },
+    "cs-04-variables": {
+      "id": "cs-04-variables",
+      "unitId": "cs-computing",
+      "title": "Variables and Expressions",
+      "subtitle": "CS  /  FOUNDATIONS  /  04",
+      "pages": [
+        {
+          "heading": "Follow assignment",
+          "body": "A variable name refers to a value. In Python, an assignment replaces the value associated with that name.",
+          "exampleTitle": "Reassignment",
+          "example": "coins = 3\ncoins = coins + 2\nprint(coins)  # 5",
+          "takeaway": "Read assignments from top to bottom."
+        },
+        {
+          "heading": "Operators and types",
+          "body": "Arithmetic combines numeric values; operators have precedence. Strings represent text. In Python, '+' behaves differently for numbers and strings.",
+          "exampleTitle": "Two uses of +",
+          "example": "3 + 4 -> 7\n'3' + '4' -> '34'",
+          "takeaway": "Identify types before predicting an expression."
+        }
+      ],
+      "practice": {
+        "id": "cs04-pr",
+        "kind": "trace",
+        "title": "Trace the register",
+        "prompt": "What is printed?",
+        "context": "x = 4\nx = x + 3\nprint(x)",
+        "options": [
+          "7",
+          "4",
+          "3"
+        ],
+        "answerIndex": 0,
+        "explanation": "The second assignment updates x to 7.",
+        "hint": "Execute each statement in order; do not skip reassignment."
+      },
+      "assessment": [
+        {
+          "id": "cs04-a",
+          "kind": "trace",
+          "title": "Variable trace",
+          "prompt": "What is printed?",
+          "context": "count = 2\ncount *= 3\ncount -= 1\nprint(count)",
+          "options": [
+            "6",
+            "5",
+            "4"
+          ],
+          "answerIndex": 1,
+          "explanation": "2 × 3 = 6 then 6 - 1 = 5.",
+          "hint": "Execute each statement in order; do not skip reassignment."
+        },
+        {
+          "id": "cs04-b",
+          "kind": "fill",
+          "title": "Write a statement",
+          "prompt": "Complete the output line to display the variable name.",
+          "accepted": [
+            "print(name)"
+          ],
+          "explanation": "print(name) displays the variable's value.",
+          "context": "name = 'Ada'\n# Type the missing Python statement",
+          "hint": "Enter a short value or code fragment. Capitalization and extra spaces do not matter."
+        },
+        {
+          "id": "cs04-c",
+          "kind": "choice",
+          "title": "Type recognition",
+          "prompt": "What is the result of '2' + '4' in Python?",
+          "options": [
+            "6",
+            "24",
+            "An integer 24"
+          ],
+          "answerIndex": 1,
+          "explanation": "Both operands are strings; + concatenates them.",
+          "context": "",
+          "hint": "Look for the evidence that directly answers the question."
+        }
+      ],
+      "isCapstone": false,
+      "minScore": 3,
+      "xpReward": 30
+    },
+    "cs-05-debugging": {
+      "id": "cs-05-debugging",
+      "unitId": "cs-computing",
+      "title": "Tracing and Debugging",
+      "subtitle": "CS  /  FOUNDATIONS  /  05",
+      "pages": [
+        {
+          "heading": "Find the first difference",
+          "body": "Debugging starts by comparing expected and actual results. A trace table records the value of variables after each statement.",
+          "exampleTitle": "Trace a loop",
+          "example": "total = 0\nfor x in [1, 2, 3]:\n    total += x\n# total is 6",
+          "takeaway": "Trace state changes, not just the final line."
+        },
+        {
+          "heading": "Fix the cause",
+          "body": "An off-by-one bug occurs when an algorithm starts or ends one step early or late. A test should expose the incorrect boundary.",
+          "exampleTitle": "Python range",
+          "example": "range(1, 4) yields 1, 2, 3; the upper bound is excluded.",
+          "takeaway": "Test empty, smallest, and boundary inputs."
+        }
+      ],
+      "practice": {
+        "id": "cs05-pr",
+        "kind": "trace",
+        "title": "Trace an accumulation",
+        "prompt": "What is total?",
+        "context": "total = 0\nfor n in range(1,4):\n    total += n",
+        "options": [
+          "4",
+          "6",
+          "10"
+        ],
+        "answerIndex": 1,
+        "explanation": "The loop adds 1, 2, and 3.",
+        "hint": "Execute each statement in order; do not skip reassignment."
+      },
+      "assessment": [
+        {
+          "id": "cs05-a",
+          "kind": "choice",
+          "title": "Boundary case",
+          "prompt": "What helps catch an off-by-one error?",
+          "options": [
+            "Only testing large values",
+            "Testing boundary inputs",
+            "Removing all assertions"
+          ],
+          "answerIndex": 1,
+          "explanation": "Boundary tests reveal inclusive/exclusive mistakes.",
+          "context": "",
+          "hint": "Look for the evidence that directly answers the question."
+        },
+        {
+          "id": "cs05-b",
+          "kind": "trace",
+          "title": "Loop count",
+          "prompt": "How many times is print called?",
+          "context": "for i in range(3):\n    print(i)",
+          "options": [
+            "2",
+            "3",
+            "4"
+          ],
+          "answerIndex": 1,
+          "explanation": "range(3) yields 0, 1, 2.",
+          "hint": "Execute each statement in order; do not skip reassignment."
+        },
+        {
+          "id": "cs05-c",
+          "kind": "fill",
+          "title": "Fix the bound",
+          "prompt": "Fill the stop value so the loop prints 1, 2, 3.",
+          "accepted": [
+            "4"
+          ],
+          "explanation": "range(1, 4) excludes 4.",
+          "context": "for x in range(1, __):\n    print(x)",
+          "hint": "Enter a short value or code fragment. Capitalization and extra spaces do not matter."
+        }
+      ],
+      "isCapstone": false,
+      "minScore": 3,
+      "xpReward": 30
+    },
+    "cs-06-capstone": {
+      "id": "cs-06-capstone",
+      "unitId": "cs-computing",
+      "title": "Capstone: Campus Gate",
+      "subtitle": "CS  /  FOUNDATIONS  /  TRIAL",
+      "pages": [
+        {
+          "heading": "Your first systems mission",
+          "body": "You are reviewing a simulated campus entry gate. Follow its input, branching and output. Each piece must be consistent.",
+          "exampleTitle": "Gate rule",
+          "example": "A student may enter only when the ID is valid AND access level is at least 2.",
+          "takeaway": "A system decision follows declared rules, not intuition."
+        },
+        {
+          "heading": "Test the edge cases",
+          "body": "Try values just below, equal to, and above the threshold. Treat invalid IDs separately from insufficient permission.",
+          "exampleTitle": "Sample cases",
+          "example": "valid=True, level=2 -> enter. valid=True, level=1 -> reject. valid=False, level=5 -> reject.",
+          "takeaway": "Verify both the identity condition and access threshold."
+        }
+      ],
+      "practice": {
+        "id": "cs06-pr",
+        "kind": "choice",
+        "title": "Warm-up",
+        "prompt": "Which input should be rejected?",
+        "options": [
+          "Valid ID, level 3",
+          "Invalid ID, level 9",
+          "Valid ID, level 2"
+        ],
+        "answerIndex": 1,
+        "explanation": "A high level does not override an invalid ID.",
+        "context": "",
+        "hint": "Look for the evidence that directly answers the question."
+      },
+      "assessment": [
+        {
+          "id": "cs06-a",
+          "kind": "trace",
+          "title": "Trace the gate",
+          "prompt": "What prints?",
+          "context": "valid = True\nlevel = 2\nif valid and level >= 2:\n    print('ENTER')\nelse:\n    print('DENY')",
+          "options": [
+            "DENY",
+            "ENTER",
+            "Nothing"
+          ],
+          "answerIndex": 1,
+          "explanation": "Both parts of the condition are true.",
+          "hint": "Execute each statement in order; do not skip reassignment."
+        },
+        {
+          "id": "cs06-b",
+          "kind": "sequence",
+          "title": "Build the decision",
+          "prompt": "Arrange the gate algorithm.",
+          "steps": [
+            "Read ID and level",
+            "Validate ID and compare level >= 2",
+            "Output ENTER or DENY"
+          ],
+          "explanation": "Validate both inputs before deciding.",
+          "hint": "Start at the earliest required action and place the dependent action last."
+        },
+        {
+          "id": "cs06-c",
+          "kind": "fill",
+          "title": "Fill the threshold",
+          "prompt": "Complete the condition to allow level 2 and above.",
+          "accepted": [
+            ">= 2",
+            ">=2"
+          ],
+          "explanation": "The >= operator includes 2.",
+          "context": "if valid and level __ :",
+          "hint": "Enter a short value or code fragment. Capitalization and extra spaces do not matter."
+        },
+        {
+          "id": "cs06-d",
+          "kind": "choice",
+          "title": "Counterexample",
+          "prompt": "Which test detects a missing ID validation check?",
+          "options": [
+            "Valid ID and level 2",
+            "Invalid ID and level 5",
+            "Valid ID and level 3"
+          ],
+          "answerIndex": 1,
+          "explanation": "A missing validation would wrongly admit an invalid ID.",
+          "context": "",
+          "hint": "Look for the evidence that directly answers the question."
+        },
+        {
+          "id": "cs06-e",
+          "kind": "trace",
+          "title": "Final trace",
+          "prompt": "What prints?",
+          "context": "valid = False\nlevel = 4\nprint('ENTER' if valid and level >= 2 else 'DENY')",
+          "options": [
+            "ENTER",
+            "DENY",
+            "False"
+          ],
+          "answerIndex": 1,
+          "explanation": "False AND True is False, so it prints DENY.",
+          "hint": "Execute each statement in order; do not skip reassignment."
+        }
+      ],
+      "isCapstone": true,
+      "minScore": 4,
+      "xpReward": 75
+    },
+    "web3-01-ledger": {
+      "id": "web3-01-ledger",
+      "unitId": "web3-foundations",
+      "title": "Shared Ledgers",
+      "subtitle": "WEB3  /  FOUNDATIONS  /  01",
+      "pages": [
+        {
+          "heading": "A shared record",
+          "body": "A blockchain is a ledger replicated across network participants. Its records can be verified against agreed rules rather than being held only by one operator.",
+          "exampleTitle": "Campus points log",
+          "example": "Several participants keep matching copies of a simulated transaction log. They compare new updates under shared rules.",
+          "takeaway": "Multiple copies do not automatically guarantee correctness."
+        },
+        {
+          "heading": "Trust assumptions",
+          "body": "Different blockchains use different participants, permissions, governance and consensus rules. Decentralization is not an absolute yes/no property.",
+          "exampleTitle": "Who can validate?",
+          "example": "A permissionless network and a private consortium chain make different participation tradeoffs.",
+          "takeaway": "Ask who controls updates and how disputes are resolved."
+        }
+      ],
+      "practice": {
+        "id": "w301-pr",
+        "kind": "choice",
+        "title": "Replication",
+        "prompt": "What best describes a replicated ledger?",
+        "options": [
+          "A shared record held by multiple participants",
+          "A private password",
+          "A single spreadsheet with no copies"
+        ],
+        "answerIndex": 0,
+        "explanation": "Replication means multiple participants hold copies.",
+        "context": "",
+        "hint": "Look for the evidence that directly answers the question."
+      },
+      "assessment": [
+        {
+          "id": "w301-a",
+          "kind": "choice",
+          "title": "Shared state",
+          "prompt": "What helps participants agree on a ledger update?",
+          "options": [
+            "Common validation and consensus rules",
+            "Matching website colors",
+            "Identical computer brands"
+          ],
+          "answerIndex": 0,
+          "explanation": "Validation and consensus rules govern accepted updates.",
+          "context": "",
+          "hint": "Look for the evidence that directly answers the question."
+        },
+        {
+          "id": "w301-b",
+          "kind": "choice",
+          "title": "Trust",
+          "prompt": "Does having many copies automatically eliminate fraud?",
+          "options": [
+            "Yes, without exceptions",
+            "No, network rules and participation matter",
+            "Only if the ledger has a logo"
+          ],
+          "answerIndex": 1,
+          "explanation": "Security depends on rules, participation and assumptions.",
+          "context": "",
+          "hint": "Look for the evidence that directly answers the question."
+        },
+        {
+          "id": "w301-c",
+          "kind": "sequence",
+          "title": "A proposed update",
+          "prompt": "Arrange a simplified update flow.",
+          "steps": [
+            "Someone proposes a transaction",
+            "Participants validate it under network rules",
+            "Accepted update enters the shared ledger"
+          ],
+          "explanation": "Validation occurs before acceptance.",
+          "hint": "Start at the earliest required action and place the dependent action last."
+        }
+      ],
+      "isCapstone": false,
+      "minScore": 3,
+      "xpReward": 30
+    },
+    "web3-02-blocks": {
+      "id": "web3-02-blocks",
+      "unitId": "web3-foundations",
+      "title": "Transactions and Blocks",
+      "subtitle": "WEB3  /  FOUNDATIONS  /  02",
+      "pages": [
+        {
+          "heading": "What is a transaction?",
+          "body": "A transaction expresses a requested network state change. A signed transaction can be checked against account and network rules.",
+          "exampleTitle": "Send an asset",
+          "example": "A signed transfer includes a sender, destination, amount, and network-specific information.",
+          "takeaway": "Signing authorizes a request; it does not guarantee acceptance."
+        },
+        {
+          "heading": "Linking blocks",
+          "body": "Blocks may contain ordered transactions and a reference to a previous block. Cryptographic hashes help reveal tampering with committed data.",
+          "exampleTitle": "A linked chain",
+          "example": "Block B includes a reference to Block A's hash. Changing committed Block A data changes the expected reference.",
+          "takeaway": "Hash links help make changes detectable under the chain's rules."
+        }
+      ],
+      "practice": {
+        "id": "w302-pr",
+        "kind": "sequence",
+        "title": "Transaction path",
+        "prompt": "Arrange a simplified transaction flow.",
+        "steps": [
+          "Create and sign a request",
+          "Network checks transaction rules",
+          "Transaction can be included in a block"
+        ],
+        "explanation": "Signing precedes network validation.",
+        "hint": "Start at the earliest required action and place the dependent action last."
+      },
+      "assessment": [
+        {
+          "id": "w302-a",
+          "kind": "choice",
+          "title": "Signature meaning",
+          "prompt": "What does a valid transaction signature generally demonstrate?",
+          "options": [
+            "Authorization by a corresponding private key",
+            "Immediate finality",
+            "Zero risk"
+          ],
+          "answerIndex": 0,
+          "explanation": "Signatures verify authorization, not confirmation.",
+          "context": "",
+          "hint": "Look for the evidence that directly answers the question."
+        },
+        {
+          "id": "w302-b",
+          "kind": "choice",
+          "title": "Block linkage",
+          "prompt": "Why reference the prior block hash?",
+          "options": [
+            "To detect changes to a linked block",
+            "To hide every transaction",
+            "To make all fees zero"
+          ],
+          "answerIndex": 0,
+          "explanation": "A hash reference supports tamper-evident history.",
+          "context": "",
+          "hint": "Look for the evidence that directly answers the question."
+        },
+        {
+          "id": "w302-c",
+          "kind": "choice",
+          "title": "Confirmation",
+          "prompt": "What is accurate about broadcasting a transaction?",
+          "options": [
+            "It guarantees success",
+            "It requests processing, not guaranteed inclusion",
+            "It transfers ownership instantly on all networks"
+          ],
+          "answerIndex": 1,
+          "explanation": "Broadcast alone does not guarantee inclusion or success.",
+          "context": "",
+          "hint": "Look for the evidence that directly answers the question."
+        }
+      ],
+      "isCapstone": false,
+      "minScore": 3,
+      "xpReward": 30
+    },
+    "web3-03-consensus": {
+      "id": "web3-03-consensus",
+      "unitId": "web3-foundations",
+      "title": "Consensus and Validators",
+      "subtitle": "WEB3  /  FOUNDATIONS  /  03",
+      "pages": [
+        {
+          "heading": "Agreement without one database",
+          "body": "Consensus mechanisms help distributed participants agree on accepted network history. Different designs rely on different trust and economic assumptions.",
+          "exampleTitle": "Validators",
+          "example": "Validators participate according to a protocol. Their proposals and attestations may be rewarded or penalized depending on the network.",
+          "takeaway": "Consensus is about agreeing on valid ordering and state."
+        },
+        {
+          "heading": "Finality and failure",
+          "body": "A confirmed transaction may have different finality properties on different networks. Congestion, chain reorganizations and validator behavior can affect timing.",
+          "exampleTitle": "A pending transfer",
+          "example": "A user observes a pending transaction and waits for the network's confirmation rules.",
+          "takeaway": "Do not confuse submission, inclusion and finality."
+        }
+      ],
+      "practice": {
+        "id": "w303-pr",
+        "kind": "choice",
+        "title": "Network agreement",
+        "prompt": "What is consensus used for?",
+        "options": [
+          "Coordinating accepted ledger history",
+          "Generating wallet passwords",
+          "Ensuring every app is scam-free"
+        ],
+        "answerIndex": 0,
+        "explanation": "Consensus coordinates accepted changes.",
+        "context": "",
+        "hint": "Look for the evidence that directly answers the question."
+      },
+      "assessment": [
+        {
+          "id": "w303-a",
+          "kind": "choice",
+          "title": "Validator role",
+          "prompt": "What does a validator do?",
+          "options": [
+            "Participate in verifying/proposing network updates",
+            "Own every user's wallet",
+            "Set all website prices"
+          ],
+          "answerIndex": 0,
+          "explanation": "Validators operate under network rules.",
+          "context": "",
+          "hint": "Look for the evidence that directly answers the question."
+        },
+        {
+          "id": "w303-b",
+          "kind": "sequence",
+          "title": "Transaction milestones",
+          "prompt": "Order these conceptual stages.",
+          "steps": [
+            "Broadcast a signed transaction",
+            "Transaction is included and confirmed",
+            "Observe any additional finality threshold"
+          ],
+          "explanation": "Different networks define finality differently.",
+          "hint": "Start at the earliest required action and place the dependent action last."
+        },
+        {
+          "id": "w303-c",
+          "kind": "choice",
+          "title": "Safety nuance",
+          "prompt": "What can congestion affect?",
+          "options": [
+            "Confirmation timing",
+            "Private keys stored offline",
+            "The definition of a bit"
+          ],
+          "answerIndex": 0,
+          "explanation": "Network congestion can delay inclusion.",
+          "context": "",
+          "hint": "Look for the evidence that directly answers the question."
+        }
+      ],
+      "isCapstone": false,
+      "minScore": 3,
+      "xpReward": 30
+    },
+    "web3-04-keys": {
+      "id": "web3-04-keys",
+      "unitId": "web3-foundations",
+      "title": "Keys and Wallet Identity",
+      "subtitle": "WEB3  /  FOUNDATIONS  /  04",
+      "pages": [
+        {
+          "heading": "Public information vs secrets",
+          "body": "A public address is used to receive assets; private keys and recovery phrases grant control and must remain secret.",
+          "exampleTitle": "Send a refund",
+          "example": "A teammate can receive a public address. They must never need a private key or recovery phrase.",
+          "takeaway": "Never disclose private keys or seed phrases."
+        },
+        {
+          "heading": "Signatures and permissions",
+          "body": "A wallet may sign a message or transaction. A signature can authorize important actions, including token allowances. Read and verify the context.",
+          "exampleTitle": "Approval caution",
+          "example": "A token approval can allow another contract to spend tokens. Verify spender and allowance before approval.",
+          "takeaway": "Signing is an action, not an ordinary login click."
+        }
+      ],
+      "practice": {
+        "id": "w304-pr",
+        "kind": "choice",
+        "title": "Public address",
+        "prompt": "Which item is generally shareable?",
+        "options": [
+          "Recovery phrase",
+          "Public receiving address",
+          "Private key"
+        ],
+        "answerIndex": 1,
+        "explanation": "A public receiving address can be shared appropriately.",
+        "context": "",
+        "hint": "Look for the evidence that directly answers the question."
+      },
+      "assessment": [
+        {
+          "id": "w304-a",
+          "kind": "choice",
+          "title": "Secret material",
+          "prompt": "What must remain private?",
+          "options": [
+            "Wallet recovery phrase",
+            "Public receiving address",
+            "Public transaction hash"
+          ],
+          "answerIndex": 0,
+          "explanation": "Recovery words can be used to control a wallet.",
+          "context": "",
+          "hint": "Look for the evidence that directly answers the question."
+        },
+        {
+          "id": "w304-b",
+          "kind": "choice",
+          "title": "Signature",
+          "prompt": "Why inspect a wallet signing request?",
+          "options": [
+            "Signatures can authorize important actions",
+            "All signatures are harmless",
+            "A wallet always reverses signatures"
+          ],
+          "answerIndex": 0,
+          "explanation": "Signing may authorize transfers, permissions or other actions.",
+          "context": "",
+          "hint": "Look for the evidence that directly answers the question."
+        },
+        {
+          "id": "w304-c",
+          "kind": "fill",
+          "title": "Quick classification",
+          "prompt": "Type PUBLIC or PRIVATE for a wallet recovery phrase.",
+          "accepted": [
+            "PRIVATE"
+          ],
+          "explanation": "The recovery phrase is sensitive and should remain secret.",
+          "context": "",
+          "hint": "Enter a short value or code fragment. Capitalization and extra spaces do not matter."
+        }
+      ],
+      "isCapstone": false,
+      "minScore": 3,
+      "xpReward": 30
+    },
+    "web3-05-verification": {
+      "id": "web3-05-verification",
+      "unitId": "web3-foundations",
+      "title": "Verify Before You Sign",
+      "subtitle": "WEB3  /  FOUNDATIONS  /  05",
+      "pages": [
+        {
+          "heading": "Suspicious prompts",
+          "body": "Unsolicited rewards, deadlines, look-alike websites and secret recovery requests are common phishing clues.",
+          "exampleTitle": "A fake prize",
+          "example": "A message demands that you connect a wallet to claim a surprise token reward before an artificial countdown ends.",
+          "takeaway": "Urgency and familiar branding are not verification."
+        },
+        {
+          "heading": "Independent verification",
+          "body": "Confirm links through a trusted channel you navigate to independently. Review the full address, spender, chain and requested permissions.",
+          "exampleTitle": "A safer workflow",
+          "example": "Open the official resource yourself, check the address, and reject permissions you do not understand.",
+          "takeaway": "Do not rely on the questionable message as the source of verification."
+        }
+      ],
+      "practice": {
+        "id": "w305-pr",
+        "kind": "choice",
+        "title": "Urgent claim",
+        "prompt": "A new site asks for your wallet phrase. Best action?",
+        "options": [
+          "Enter it quickly",
+          "Refuse and verify independently",
+          "Send half of it"
+        ],
+        "answerIndex": 1,
+        "explanation": "No legitimate prize requires your recovery phrase.",
+        "context": "",
+        "hint": "Look for the evidence that directly answers the question."
+      },
+      "assessment": [
+        {
+          "id": "w305-a",
+          "kind": "choice",
+          "title": "Domain check",
+          "prompt": "What is the strongest evidence of an official destination?",
+          "options": [
+            "Independently verified exact domain",
+            "Matching logo",
+            "HTTPS alone"
+          ],
+          "answerIndex": 0,
+          "explanation": "A logo and HTTPS can exist on malicious sites.",
+          "context": "",
+          "hint": "Look for the evidence that directly answers the question."
+        },
+        {
+          "id": "w305-b",
+          "kind": "sequence",
+          "title": "Security routine",
+          "prompt": "Put this verification process in order.",
+          "steps": [
+            "Stop at unexpected wallet prompt",
+            "Navigate independently to official resources",
+            "Only sign after reviewing full action and permissions"
+          ],
+          "explanation": "Do not sign first and investigate later.",
+          "hint": "Start at the earliest required action and place the dependent action last."
+        },
+        {
+          "id": "w305-c",
+          "kind": "choice",
+          "title": "Token permissions",
+          "prompt": "A free guide demands unlimited approval. What should you do?",
+          "options": [
+            "Reject and inspect",
+            "Approve without reading",
+            "Share the recovery words"
+          ],
+          "answerIndex": 0,
+          "explanation": "Unnecessary unlimited allowances should be rejected.",
+          "context": "",
+          "hint": "Look for the evidence that directly answers the question."
+        }
+      ],
+      "isCapstone": false,
+      "minScore": 3,
+      "xpReward": 30
+    },
+    "web3-06-capstone": {
+      "id": "web3-06-capstone",
+      "unitId": "web3-foundations",
+      "title": "Capstone: The False Airdrop",
+      "subtitle": "WEB3  /  FOUNDATIONS  /  TRIAL",
+      "pages": [
+        {
+          "heading": "Incident simulation",
+          "body": "A simulated campus announcement claims a surprise airdrop. You must reason about authenticity, wallet permissions and network confirmation.",
+          "exampleTitle": "Case file",
+          "example": "The announcement uses a look-alike domain and requests an unlimited token allowance to a newly deployed contract.",
+          "takeaway": "Verify context; never allow urgency to override safety."
+        },
+        {
+          "heading": "Complete the chain of evidence",
+          "body": "A transaction signature authorizes a request; broadcasting does not guarantee a result. Assess source, requested action and network status separately.",
+          "exampleTitle": "Security decision",
+          "example": "Reject unverified requests, inspect verified sources, and distinguish pending transactions from confirmed updates.",
+          "takeaway": "A correct decision needs both identity and permission checks."
+        }
+      ],
+      "practice": {
+        "id": "w306-pr",
+        "kind": "choice",
+        "title": "First response",
+        "prompt": "Unfamiliar airdrop site demands unlimited approval. Your first action?",
+        "options": [
+          "Reject and verify",
+          "Approve because it is free",
+          "Share secret key"
+        ],
+        "answerIndex": 0,
+        "explanation": "Reject unexpected high-risk permissions.",
+        "context": "",
+        "hint": "Look for the evidence that directly answers the question."
+      },
+      "assessment": [
+        {
+          "id": "w306-a",
+          "kind": "choice",
+          "title": "Look-alike",
+          "prompt": "What is a robust way to check the domain?",
+          "options": [
+            "Navigate from independently trusted resources",
+            "Trust a screenshot of the logo",
+            "Trust a social media reply"
+          ],
+          "answerIndex": 0,
+          "explanation": "Use an independently verified channel.",
+          "context": "",
+          "hint": "Look for the evidence that directly answers the question."
+        },
+        {
+          "id": "w306-b",
+          "kind": "choice",
+          "title": "Spender",
+          "prompt": "What must be checked in a token approval?",
+          "options": [
+            "Spender and allowance",
+            "Only page background",
+            "Browser tab color"
+          ],
+          "answerIndex": 0,
+          "explanation": "Approval scope and spender identity determine the requested authorization.",
+          "context": "",
+          "hint": "Look for the evidence that directly answers the question."
+        },
+        {
+          "id": "w306-c",
+          "kind": "sequence",
+          "title": "Investigate safely",
+          "prompt": "Arrange the incident response.",
+          "steps": [
+            "Do not approve the unexpected request",
+            "Verify source and contract context independently",
+            "Only consider an understood, necessary action"
+          ],
+          "explanation": "Safety must precede signing.",
+          "hint": "Start at the earliest required action and place the dependent action last."
+        },
+        {
+          "id": "w306-d",
+          "kind": "fill",
+          "title": "Key classification",
+          "prompt": "Is a recovery phrase PUBLIC or PRIVATE?",
+          "accepted": [
+            "PRIVATE"
+          ],
+          "explanation": "Seed phrases must remain secret.",
+          "context": "",
+          "hint": "Enter a short value or code fragment. Capitalization and extra spaces do not matter."
+        },
+        {
+          "id": "w306-e",
+          "kind": "choice",
+          "title": "Pending status",
+          "prompt": "A transaction is broadcast but pending. What can be said?",
+          "options": [
+            "It is not yet confirmed",
+            "It is definitely final",
+            "It cannot fail"
+          ],
+          "answerIndex": 0,
+          "explanation": "Broadcasting does not guarantee confirmation.",
+          "context": "",
+          "hint": "Look for the evidence that directly answers the question."
+        }
+      ],
+      "isCapstone": true,
+      "minScore": 4,
+      "xpReward": 75
+    }
+  }
+}

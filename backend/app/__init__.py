@@ -1,0 +1,1 @@
+"""CampusBounty authenticated progression service."""

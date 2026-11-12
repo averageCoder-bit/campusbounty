@@ -25,6 +25,69 @@ const LEARNING_KEY = "campusbounty:learning:v1"; // Maintain G3.7 registry contr
 const STORAGE_KEY = "campusbounty:academy-progress:v2";
 const APPLIED_KEY = "campusbounty:academy-applied:v2";
 const SESSION_KEY = "campusbounty:session:v1";
+const VERIFIED_KEY = "campusbounty:progression:verified-user";
+const SERVER_BASELINE_KEY = "campusbounty:progression:server-baseline";
+interface ServerBaseline { userId: string; totalXp: number; coins: number }
+function totalFromLevel(level: number, xp: number): number {
+    const steps = Math.max(0, Math.floor(level) - 1);
+    return Math.floor(xp) + steps * 100 + ((steps * (steps - 1)) / 2) * 50;
+}
+function levelFromTotal(totalXp: number): { level: number; xp: number; xpToNext: number } {
+    let level = 1, xp = Math.max(0, Math.floor(totalXp)), xpToNext = 100;
+    while (xp >= xpToNext) { xp -= xpToNext; level++; xpToNext += 50; }
+    return { level, xp, xpToNext };
+}
+
+
+/** A trusted snapshot returned by authenticated FastAPI; never construct from localStorage. */
+export interface VerifiedSnapshot {
+    authority: "server";
+    userId: string;
+    profile: { level: number; xp: number; xpToNext: number; totalXp: number;
+        coins: number; questFindingCleared: boolean };
+    learning: LearningProgress;
+    adventureRewardsVerified: false;
+}
+
+/** Hydrate game-wide registry without importing unverified local XP into the database. */
+export function applyVerifiedSnapshot(scene: Phaser.Scene, snapshot: VerifiedSnapshot): void {
+    if (snapshot.authority !== "server") throw new Error("Expected authoritative progression snapshot");
+    // Keep locally earned dungeon/Quest Finding rewards visible during the same account
+    // session, but NEVER upload these provisional values to the backend.
+    const baseline = scene.registry.get(SERVER_BASELINE_KEY) as ServerBaseline | undefined;
+    const previous = scene.registry.get(SESSION_KEY) as {
+        level: number; xp: number; coins: number; questFindingCleared: boolean;
+    } | undefined;
+    const sameAccount = scene.registry.get(VERIFIED_KEY) === snapshot.userId &&
+        baseline?.userId === snapshot.userId;
+    const localXp = sameAccount && previous
+        ? Math.max(0, totalFromLevel(previous.level, previous.xp) - baseline.totalXp) : 0;
+    const localCoins = sameAccount && previous
+        ? Math.max(0, previous.coins - baseline.coins) : 0;
+    const display = levelFromTotal(snapshot.profile.totalXp + localXp);
+    scene.registry.set(VERIFIED_KEY, snapshot.userId);
+    scene.registry.set(SERVER_BASELINE_KEY, { userId: snapshot.userId,
+        totalXp: snapshot.profile.totalXp, coins: snapshot.profile.coins } satisfies ServerBaseline);
+    scene.registry.set(LEARNING_KEY, snapshot.learning);
+    scene.registry.set(APPLIED_KEY, snapshot.learning.academyXpEarned);
+    scene.registry.set(SESSION_KEY, { ...display,
+        coins: snapshot.profile.coins + localCoins,
+        questFindingCleared: sameAccount && previous?.questFindingCleared === true });
+}
+/** Removes the signed-in account view; guest data is stored separately in localStorage. */
+export function clearVerifiedSnapshot(scene: Phaser.Scene): void {
+    if (!scene.registry.get(VERIFIED_KEY)) return;
+    scene.registry.set(VERIFIED_KEY, undefined);
+    scene.registry.set(SERVER_BASELINE_KEY, undefined);
+    scene.registry.set(LEARNING_KEY, undefined);
+    scene.registry.set(APPLIED_KEY, 0);
+    scene.registry.set(SESSION_KEY, undefined);
+}
+
+export function isVerifiedAccount(scene: Phaser.Scene): boolean {
+    return typeof scene.registry.get(VERIFIED_KEY) === "string";
+}
+
 
 const empty = (): LearningProgress => ({ version: 2, lessons: {}, academyXpEarned: 0,
     mistakes: {}, days: {}, achievements: [] });
@@ -85,7 +148,7 @@ export function getLearningProgress(scene: Phaser.Scene): LearningProgress {
 }
 function save(scene: Phaser.Scene, value: LearningProgress): void {
     scene.registry.set(LEARNING_KEY, value);
-    persist(value);
+    if (!isVerifiedAccount(scene)) persist(value);
 }
 export function getLessonMastery(scene: Phaser.Scene, id: string): LessonMastery {
     return getLearningProgress(scene).lessons[id] ?? { attempts: 0, bestScore: 0, mastered: false };
@@ -103,6 +166,7 @@ function awardXP(scene: Phaser.Scene, xp: number): void {
 }
 /** Restores only previously earned Academy XP after a refresh; never reclaims Dungeon awards. */
 export function syncAcademyXP(scene: Phaser.Scene): number {
+    if (isVerifiedAccount(scene)) return 0; // Cloud XP is already included in server profile.
     const progress = getLearningProgress(scene);
     const already = safeNumber(scene.registry.get(APPLIED_KEY));
     const delta = Math.max(0, progress.academyXpEarned - already);
@@ -146,7 +210,9 @@ function complete(scene: Phaser.Scene, lessonId: string, score: number, total: n
     const prior = getLessonMastery(scene, lessonId);
     const passed = score >= passingScore;
     const firstMastery = passed && !prior.mastered;
-    const awardedXp = firstMastery ? Math.floor(xpReward) : 0;
+    // Legacy G3.7 bridge lessons are still local demo checks when signed in.
+    // Only the backend can grant server-verified XP to signed-in accounts.
+    const awardedXp = firstMastery && !isVerifiedAccount(scene) ? Math.floor(xpReward) : 0;
     const now = new Date().toISOString();
     const lessons = { ...p.lessons, [lessonId]: { attempts: prior.attempts + 1,
         bestScore: Math.max(score, prior.bestScore), mastered: prior.mastered || passed,

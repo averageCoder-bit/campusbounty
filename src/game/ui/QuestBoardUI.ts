@@ -1,4 +1,6 @@
 import * as Phaser from "phaser";
+import { refreshVerifiedProgression } from "../services/ProgressionClient";
+import { isVerifiedAccount } from "../data/LearningProgress";
 import { ACADEMY_TRACKS, type AcademyTrack, type AcademyUnit } from "../data/questAcademyCurriculum";
 import { getAcademyLesson } from "../data/curriculum/academyLessons";
 import { getInteractiveLesson } from "../data/lessonContent";
@@ -30,6 +32,20 @@ export class QuestBoardUI {
     private selectedUnitIndex = 0;
     private unitScroll = 0;
     private activePanel?: AcademyLessonPanel | AcademyReviewPanel | LessonPanel;
+    private cloudError = "";
+    private readonly authChanged = (): void => { void this.refreshCloud(); };
+    private async refreshCloud(): Promise<void> {
+        try {
+            await refreshVerifiedProgression(this.scene);
+            this.cloudError = "";
+        } catch (error) {
+            this.cloudError = error instanceof Error ? error.message : "Cloud connection failed";
+        }
+        if (this.destroyed) return;
+        if (this.opened && this.view === "home") this.renderHome();
+        if (this.opened && this.view === "unit") this.renderUnit();
+        this.onProgressChanged?.();
+    }
 
     private readonly onEscapeKey = (event: KeyboardEvent): void => {
         if (!this.opened) return;
@@ -74,6 +90,8 @@ export class QuestBoardUI {
         scene.input.keyboard?.on("keydown-ESC", this.onEscapeKey);
         scene.input.keyboard?.on("keydown", this.onKeyboard);
         scene.input.on("wheel", this.onWheel);
+        if (typeof window !== "undefined")
+            window.addEventListener("campusbounty:auth-changed", this.authChanged);
     }
     open(): void {
         if (this.destroyed || this.opened) return;
@@ -81,6 +99,7 @@ export class QuestBoardUI {
         this.opened = true; this.selectedTrack = undefined; this.view = "home";
         this.renderHome(); this.root.setVisible(true); this.onOpenChanged?.(true);
         if (xpRestored) this.onProgressChanged?.();
+        void this.refreshCloud();
     }
     close(): void {
         if (!this.opened || this.destroyed) return;
@@ -93,6 +112,8 @@ export class QuestBoardUI {
         this.scene.input.keyboard?.off("keydown-ESC", this.onEscapeKey);
         this.scene.input.keyboard?.off("keydown", this.onKeyboard);
         this.scene.input.off("wheel", this.onWheel);
+        if (typeof window !== "undefined")
+            window.removeEventListener("campusbounty:auth-changed", this.authChanged);
         this.root.destroy(true);
     }
     private resetPage(): void {
@@ -139,12 +160,15 @@ export class QuestBoardUI {
         const today = dailyMasteries(this.scene);
         text(this.scene, this.page, 108, 609,
             `DAILY GOAL ${Math.min(today, 2)}/2   /   ${reviewCount} TO REVIEW   /   ` +
-            (isLearningStorageAvailable() ? "LOCAL SAVE ACTIVE" : "SAVE UNAVAILABLE"),
+            (this.cloudError ? "CLOUD CONNECTION ERROR" : isVerifiedAccount(this.scene)
+                ? "CLOUD ACCOUNT ACTIVE" : isLearningStorageAvailable()
+                ? "GUEST LOCAL SAVE" : "SAVE UNAVAILABLE"),
             8, "#7DD3FC", 802, true);
         button(this.scene, this.page, 108, 645, 235, 37, `REVIEW MISTAKES (${reviewCount})`,
             () => this.renderReview(), { border: A.teal, size: 8 });
         button(this.scene, this.page, 357, 645, 207, 37, "ACHIEVEMENTS", () => this.renderAwards(), { size: 8 });
-        text(this.scene, this.page, 582, 655, "LOCAL DEMO PROGRESS  /  NOT AN OFFICIAL CREDENTIAL",
+        text(this.scene, this.page, 582, 655, isVerifiedAccount(this.scene) ? "CLOUD ACADEMY SAVED  /  ADVENTURES ARE LOCAL" :
+                "GUEST PROGRESS  /  NOT AN OFFICIAL CREDENTIAL",
             8, "#A5B8C9", 343, true);
     }
     private showTrack(track: AcademyTrack): void {
