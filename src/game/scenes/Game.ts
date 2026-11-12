@@ -315,10 +315,14 @@ export class Game extends Phaser.Scene {
                 }
             },
             // Only Quest Finding is implemented and playable at this milestone.
-            availableModes: ["quest-finding"],
+
+            availableModes: ["quest-finding", "dungeon-conquer"],
+
             onLaunch: (mode) => {
                 if (mode === "quest-finding") {
                     this.scene.start("QuestFinding");
+                } else if (mode === "dungeon-conquer") {
+                    this.scene.start("DungeonConquer");
                 }
             },
         });

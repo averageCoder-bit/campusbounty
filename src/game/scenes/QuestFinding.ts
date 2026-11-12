@@ -55,7 +55,7 @@ type Wisp = {
  * G3.6 — Seeded corporate ruin: 24 sectors, investigation, click-to-defeat drones.
  * Three randomized departments, nine evidence records, six deduction checks,
  * a seeded vault cipher, less aggressive security drones and a
- * 1.5x mouse-leading camera. Rewards remain in-memory demo rewards.
+ * 1.25x mouse-leading camera. Rewards remain in-memory demo rewards.
  */
 export class QuestFinding extends Phaser.Scene {
     private player?: Player;

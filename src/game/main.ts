@@ -6,6 +6,7 @@ import { MainMenu } from "./scenes/MainMenu";
 import { Game as MainGame } from "./scenes/Game";
 import { GameOver } from "./scenes/GameOver";
 import { QuestFinding } from "./scenes/QuestFinding";
+import { DungeonConquer } from "./scenes/DungeonConquer";
 
 const config: Phaser.Types.Core.GameConfig = {
     type: AUTO,
@@ -42,9 +43,10 @@ const config: Phaser.Types.Core.GameConfig = {
         Boot,
         Preloader,
         MainMenu,
-        MainGame, // ✅ Your Quest Hall scene
+        MainGame,
         GameOver,
         QuestFinding,
+        DungeonConquer,
     ],
 };
 

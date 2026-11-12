@@ -6,7 +6,7 @@ import * as Phaser from "phaser";
  * Eight directional idle + walk animations, no nose or backpack.
  * Drop-in interface: new Player(scene, x, y), .sprite, .update(), .destroy().
  */
-const PREFIX = "cb-player-student-v3";
+const PREFIX = "cb-player-student-v4-side-profile";
 const PLAYER_TEXTURE = PREFIX;
 const FRAME_W = 20;
 const FRAME_H = 28;
@@ -172,25 +172,39 @@ function drawFrontDiag(px: Pixel, p: Pose): void {
     px(10, 8 + b, 1, 2, C.eye);
 }
 
-/** Profile facing left: one eye, no protruding nose pixel. */
+/** Profile facing left. The right-facing frame is mirrored in drawFrame(). */
 function drawSide(px: Pixel, p: Pose): void {
     const b = p.bob;
     const stride = p.leftLift - p.rightLift;
+
+    // Keep the feet on opposite steps, preserving the existing walking cadence.
     px(10 + stride, 21, 3, 5 - p.rightLift, C.pantsShade);
     px(7 - stride, 21, 3, 5 - p.leftLift, C.pants);
     px(9 + stride, 26 - p.rightLift, 4, 2, C.shoes);
     px(6 - stride, 26 - p.leftLift, 4, 2, C.shoes);
 
-    // Far arm behind shirt; near arm swings in front of torso.
-    px(11 - stride, 15 + b, 2, 5, C.shirtShade);
-    px(11 - stride, 20 + b, 2, 2, C.skinShade);
+    // The far shoulder sits BEHIND the torso; don't draw a detached far hand.
+    px(12, 15 + b, 1, 5, C.shirtShade);
+
+    // Side-view torso: the chest / badge faces LEFT (the direction of travel).
+    // Right-facing frames mirror these exact pixels, including the layering.
     px(7, 13 + b, 6, 8, C.shirt);
-    px(11, 14 + b, 2, 6, C.shirtShade);
+    px(7, 14 + b, 1, 6, C.shirtHighlight);
+    px(12, 14 + b, 1, 6, C.shirtShade);
     px(7, 20 + b, 6, 1, C.pants);
     px(7, 16 + b, 2, 2, C.badge);
-    px(8 + stride, 14 + b, 2, 6, C.shirt);
-    px(8 + stride, 20 + b, 2, 2, C.skin);
 
+    // The near arm belongs on the MIDDLE of the torso, not the leading edge.
+    // Use the opposite leg's arm phase to create a natural reciprocal walk.
+    // Walking toward screen-left: front leg forward => arm back, and vice versa.
+    const armStep = p.rightArm;
+    const armX = 9 + armStep;
+    const armY = 14 + b + (armStep < 0 ? -1 : 0);
+    px(armX, armY, 3, 6, C.shirtShade);
+    px(armX, armY, 1, 4, C.shirt);
+    px(armX, armY + 6, 3, 2, C.skin);
+
+    // Original recognizable hair silhouette, cheek and single profile eye.
     px(6, 5 + b, 7, 7, C.skin);
     px(5, 7 + b, 8, 4, C.skin);
     px(7, 11 + b, 6, 2, C.skinShade);
@@ -202,7 +216,7 @@ function drawSide(px: Pixel, p: Pose): void {
     px(13, 11 + b, 3, 1, C.hairDark);
     px(8, 3 + b, 4, 1, C.hairLight);
     px(7, 8 + b, 1, 2, C.eye);
-    px(11, 9 + b, 1, 2, C.skinShade); // small ear, not a nose
+    px(11, 9 + b, 1, 2, C.skinShade); // ear, not a nose
 }
 
 /** Back view: the student is NOT carrying a backpack. */
