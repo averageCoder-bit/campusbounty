@@ -1,5 +1,19 @@
 import * as Phaser from "phaser";
 import {
+    ART,
+    ROOM_ART,
+    ROOM_ART_OFFSET,
+    Pen,
+    paintRoom,
+    paintCorridor,
+    corridorGeometry,
+    paintVoidTile,
+    themeFor,
+    type Paint,
+    type RoomArtSpec,
+} from "./QuestFindingArt";
+import { paintFurniture, paintStation, furnitureForTheme, STATION_SIZES, type FurnitureKind } from "./QuestFindingObjects";
+import {
     buildQuestCases,
     SeededRandom,
     type CaseSet,
@@ -382,6 +396,80 @@ export function isArchiveWalkable(x: number, y: number): boolean {
     );
 }
 
+/**
+ * Bake detailed, seeded art into a small canvas texture once per room/corridor.
+ * The canvas grid is the same 3-world-pixel grid used by the player sprite.
+ * Art does NOT advance the gameplay RNG or add physical colliders.
+ */
+function bakeArt(
+    scene: Phaser.Scene,
+    key: string,
+    width: number,
+    height: number,
+    seed: number,
+    draw: (pen: Pen) => void,
+): string {
+    // Fixed keys keep repeated/replayed expeditions from accumulating GPU textures.
+    if (scene.textures.exists(key)) scene.textures.remove(key);
+    const texture = scene.textures.createCanvas(key, width, height);
+    if (!texture) throw new Error(`Cannot create Quest Finding texture: ${key}`);
+    const ctx = texture.context;
+    ctx.imageSmoothingEnabled = false;
+    const styleCache = new Map<string, string>();
+    const paint: Paint = {
+        rect(x, y, w, h, color, alpha = 1) {
+            const a = Math.max(0, Math.min(1, alpha));
+            if (a <= 0 || w <= 0 || h <= 0) return;
+            const colorKey = `${color}:${a}`;
+            let css = styleCache.get(colorKey);
+            if (!css) {
+                css = `rgba(${(color >> 16) & 255},${(color >> 8) & 255},${color & 255},${a})`;
+                styleCache.set(colorKey, css);
+            }
+            ctx.fillStyle = css;
+            ctx.fillRect(x, y, w, h);
+        },
+    };
+    draw(new Pen(paint, width, height, seed));
+    texture.refresh();
+    texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
+    return key;
+}
+
+function doorsFor(moduleIndex: number): RoomArtSpec["doors"] {
+    const here = modules[moduleIndex];
+    const result = { n: false, s: false, e: false, w: false };
+    for (const [a, b] of links) {
+        const otherIndex = a === moduleIndex ? b : b === moduleIndex ? a : -1;
+        if (otherIndex < 0) continue;
+        const other = modules[otherIndex];
+        if (other.r < here.r) result.n = true;
+        if (other.r > here.r) result.s = true;
+        if (other.c > here.c) result.e = true;
+        if (other.c < here.c) result.w = true;
+    }
+    return result;
+}
+
+/**
+ * The previous flat-floor renderer advanced this RNG before placing props.
+ * Keeping those draws preserves the established seeded prop/drone locations
+ * across the purely visual upgrade, without letting the new art consume them.
+ */
+function consumeLegacyFloorRolls(rng: SeededRandom, area: WalkableArea): void {
+    const { x, y, width: w, height: h } = area;
+    for (let yy = y + 15; yy < y + h - 25; yy += 82) {
+        for (let xx = x + 15; xx < x + w - 25; xx += 82) {
+            rng.pick([area.floor, 0x1a2e3d, 0x1c2a36, 0x1b2533]);
+            rng.next();
+            if (rng.next() < 0.1) {
+                rng.int(12, 60);
+                rng.int(11, 60);
+            }
+        }
+    }
+}
+
 export function buildQuestFindingMap(
     scene: Phaser.Scene,
     seed: number,
@@ -393,180 +481,109 @@ export function buildQuestFindingMap(
     const obstacles: Phaser.Geom.Rectangle[] = [];
     const lights: FlickerLight[] = [];
     const rng = new SeededRandom(ARCHIVE.seed ^ 0xa7774);
-    const base = scene.add.graphics().setDepth(-1000);
-    base.fillStyle(0x020409).fillRect(0, 0, ARCHIVE.width, ARCHIVE.height);
 
-    const floor = (a: WalkableArea) => {
-        const { x, y, width: w, height: h } = a;
-        base.fillStyle(0x03060d).fillRect(x + 14, y + 14, w, h);
-        base.fillStyle(0x354456).fillRect(x - 5, y - 5, w + 10, h + 10);
-        base.fillStyle(0x0c1520).fillRect(x, y, w, h);
-        base.fillStyle(a.floor).fillRect(x + 12, y + 12, w - 24, h - 24);
-        for (let yy = y + 15; yy < y + h - 25; yy += 82)
-            for (let xx = x + 15; xx < x + w - 25; xx += 82) {
-                base.fillStyle(
-                    rng.pick([a.floor, 0x1a2e3d, 0x1c2a36, 0x1b2533]),
-                    rng.next() * 0.27,
-                ).fillRect(xx, yy, 80, 80);
-                base.lineStyle(1, 0x0a111b, 0.4).strokeRect(xx, yy, 82, 82);
-                if (rng.next() < 0.1) {
-                    base.fillStyle(0x516478, 0.37).fillRect(
-                        xx + rng.int(12, 60),
-                        yy + rng.int(11, 60),
-                        5,
-                        2,
-                    );
-                }
-            }
-        // Stripped corporate edging with hazard tape, deliberately muted.
-        base.fillStyle(0x6e5833, 0.6).fillRect(x + 10, y + 10, w - 20, 4);
-        base.fillStyle(0x060b13, 0.55).fillRect(x + 12, y + h - 19, w - 24, 7);
-    };
-    // Hallways first, then enclosed offices. Both share the same logical floor union.
-    WALKABLE.filter((a) => a.id.startsWith("corridor")).forEach(floor);
-    WALKABLE.filter((a) => a.id.startsWith("room")).forEach(floor);
-    const solid = (cx: number, cy: number, w: number, h: number) => {
-        const b = scene.physics.add.staticImage(cx, cy, "__WHITE");
-        b.setDisplaySize(w, h).refreshBody().setVisible(false);
-        blockers.add(b);
-        obstacles.push(new Phaser.Geom.Rectangle(cx - w / 2, cy - h / 2, w, h));
-    };
-    const prop = (
-        cx: number,
-        cy: number,
-        w: number,
-        h: number,
-        kind: number,
-    ) => {
-        const g = scene.add.graphics().setDepth(cy + h / 2);
-        g.fillStyle(0x000000, 0.52).fillRect(
-            cx - w / 2 + 10,
-            cy - h / 2 + 10,
-            w,
-            h,
-        );
-        const x = cx - w / 2,
-            y = cy - h / 2;
-        if (kind === 0) {
-            // shattered desk & monitor
-            g.fillStyle(0x392a26).fillRect(x, y, w, h - 9);
-            g.fillStyle(0x866146).fillRect(x + 7, y + 5, w - 14, h - 19);
-            g.fillStyle(0x070f19).fillRect(cx - 16, cy - 13, 32, 24);
-            g.fillStyle(0x4ac5bc).fillRect(cx - 12, cy - 9, 24, 9);
-            g.fillStyle(0xc29348).fillRect(cx - 2, cy + 10, 5, 4);
-        } else if (kind === 1) {
-            // server rack
-            g.fillStyle(0x050c17).fillRect(x, y, w, h);
-            g.fillStyle(0x506079).fillRect(x + 5, y + 4, w - 10, h - 9);
-            for (let i = 0; i < 5; i++) {
-                g.fillStyle(0x0b1b2c).fillRect(
-                    x + 12,
-                    y + 11 + (i * (h - 21)) / 5,
-                    w - 24,
-                    12,
-                );
-                g.fillStyle(i % 2 ? 0xfaa955 : 0x3fb8a6).fillRect(
-                    x + 17,
-                    y + 14 + (i * (h - 21)) / 5,
-                    7,
-                    4,
-                );
-            }
-        } else if (kind === 2) {
-            // cubicle divider
-            g.fillStyle(0x354253).fillRect(x, y, w, h);
-            g.fillStyle(0x53647a).fillRect(x + 5, y + 5, w - 10, h - 10);
-            g.fillStyle(0xc5934e).fillRect(x + 4, y + h - 8, w - 8, 4);
-        } else {
-            // filing cabinet
-            g.fillStyle(0x34485a).fillRect(x, y, w, h);
-            g.fillStyle(0x5d7885).fillRect(x + 6, y + 4, w - 12, h - 8);
-            for (let k = 0; k < 3; k++) {
-                const yy = y + 8 + (k * (h - 15)) / 3;
-                g.fillStyle(0x172b39).fillRect(x + 11, yy, w - 22, 9);
-                g.fillStyle(0xc59c52).fillRect(cx - 4, yy + 3, 8, 3);
-            }
+    // Reuse one tiny void texture across ordinary images. Avoid a 6400x4480
+    // TileSprite: Phaser warns that world-sized TileSprites waste GPU memory.
+    const voidSize = 128; // power-of-two texture for crisp pixel rendering
+    const voidWorld = voidSize * ART;
+    const voidKey = bakeArt(scene, "cb-qf-v2-void", voidSize, voidSize,
+        ARCHIVE.seed ^ 0x41a3c5, (pen) => paintVoidTile(pen));
+    for (let y = 0; y < ARCHIVE.height; y += voidWorld) {
+        for (let x = 0; x < ARCHIVE.width; x += voidWorld) {
+            scene.add.image(x, y, voidKey)
+                .setOrigin(0, 0).setScale(ART).setDepth(-1200);
         }
-        solid(cx, cy, w - 4, h - 6);
+    }
+
+    // Bake connectors first, then rooms. Each room's doors are derived from
+    // the SAME seeded links that produce the logical walkable corridor union.
+    const corridors = WALKABLE.filter((a) => a.id.startsWith("corridor"));
+    for (let i = 0; i < corridors.length; i++) {
+        const area = corridors[i];
+        const horizontal = area.width > area.height;
+        const geom = corridorGeometry(area.width, area.height, horizontal);
+        const artSeed = (ARCHIVE.seed ^ Math.imul(i + 1, 0x9e3779b1)) >>> 0;
+        const key = bakeArt(scene, `cb-qf-v2-corridor-${i}`, geom.aw, geom.ah,
+            artSeed, (pen) => paintCorridor(pen, geom, {
+                horizontal, seed: artSeed, stair: !horizontal,
+            }));
+        scene.add.image(area.x - geom.fx * ART, area.y - geom.fy * ART, key)
+            .setOrigin(0, 0).setScale(ART).setDepth(-1100);
+    }
+    for (const room of modules) {
+        const artSeed = (ARCHIVE.seed ^ Math.imul(room.index + 1, 0x85ebca6b)) >>> 0;
+        const spec: RoomArtSpec = {
+            theme: themeFor(room.title), sector: room.sector, seed: artSeed,
+            floor: room.floor, doors: doorsFor(room.index),
+        };
+        const key = bakeArt(scene, `cb-qf-v2-room-${room.index}`, ROOM_ART.aw, ROOM_ART.ah,
+            artSeed, (pen) => paintRoom(pen, spec));
+        scene.add.image(room.x - ROOM_ART_OFFSET.x, room.y - ROOM_ART_OFFSET.y, key)
+            .setOrigin(0, 0).setScale(ART).setDepth(-1000);
+    }
+
+    // Preserve the old seed's furniture and enemy locations: the new art never
+    // touches this RNG, and these legacy visual draws are intentionally skipped.
+    corridors.forEach((a) => consumeLegacyFloorRolls(rng, a));
+    WALKABLE.filter((a) => a.id.startsWith("room"))
+        .forEach((a) => consumeLegacyFloorRolls(rng, a));
+
+    // Physics, drone line-of-sight and visible sprite footprints share one source.
+    // Shadows are 1 ART pixel outside the solid object; never make invisible
+    // geometry larger than the visible furniture / station.
+    const solid = (cx: number, cy: number, w: number, h: number) => {
+        const actualW = Math.max(6, w);
+        const actualH = Math.max(6, h);
+        const b = scene.physics.add.staticImage(cx, cy, "__WHITE");
+        b.setDisplaySize(actualW, actualH).refreshBody().setVisible(false);
+        blockers.add(b);
+        obstacles.push(new Phaser.Geom.Rectangle(
+            cx - actualW / 2, cy - actualH / 2, actualW, actualH,
+        ));
     };
-    // Offices are intentionally furnished with side-wall obstacles: main axes stay open.
+    let propId = 0;
+    const prop = (
+        cx: number, cy: number, w: number, h: number,
+        kind: FurnitureKind, theme: ReturnType<typeof themeFor>,
+    ) => {
+        // Snap the entire image to the same 3px grid as the baked environment.
+        const pw = Math.ceil(w / ART), ph = Math.ceil(h / ART);
+        const worldW = pw * ART, worldH = ph * ART;
+        const key = bakeArt(scene, `cb-qf-v3-prop-${propId++}`, pw, ph,
+            (ARCHIVE.seed ^ Math.imul(propId, 0x9e3779b1)) >>> 0,
+            (pen) => paintFurniture(pen, theme, kind));
+        scene.add.image(cx, cy, key).setScale(ART).setDepth(cy + worldH / 2);
+        // Exclude only the 1-pixel rendered shadow from the hitbox.
+        solid(cx - ART / 2, cy - ART / 2, worldW - ART * 2, worldH - ART * 2);
+    };
+    // The floor artwork contains only walkable decals. Actual solid props are
+    // individual themed pixel sprites with blockers sized to their painted bodies.
     for (const m of modules) {
         const n = rng.int(7, 11);
+        const roomTheme = themeFor(m.title);
         for (let i = 0; i < n; i++) {
             const side = rng.pick([-1, 1]);
             const x = m.cx + side * rng.int(215, 310);
             const y = m.cy + rng.int(-260, 260);
-            const kind = rng.int(0, 3);
+            const kind = furnitureForTheme(roomTheme, rng.int(0, 3));
             const w = kind === 2 ? rng.int(52, 100) : rng.int(65, 106);
             const h = kind === 1 ? rng.int(88, 124) : rng.int(42, 88);
             if (INTERACTABLES.some((s) => Math.hypot(s.x - x, s.y - y) < 138))
                 continue;
-            if (
-                obstacles.some((o) =>
-                    Phaser.Geom.Rectangle.Overlaps(
-                        o,
-                        new Phaser.Geom.Rectangle(
-                            x - w / 2 - 12,
-                            y - h / 2 - 12,
-                            w + 24,
-                            h + 24,
-                        ),
-                    ),
-                )
-            )
-                continue;
-            prop(x, y, w, h, kind);
+            if (obstacles.some((o) => Phaser.Geom.Rectangle.Overlaps(
+                o, new Phaser.Geom.Rectangle(x - w / 2 - 12, y - h / 2 - 12, w + 24, h + 24),
+            ))) continue;
+            prop(x, y, w, h, kind, roomTheme);
         }
-        // Cracked glass partitions, dead signs and exposed emergency wiring.
-        const atmosphere = scene.add.graphics().setDepth(-85);
-        const ax = m.x + 31,
-            ay = m.y + 32;
-        atmosphere.fillStyle(0x071520).fillRect(ax, ay, 116, 42);
-        atmosphere.fillStyle(0x214457).fillRect(ax + 7, ay + 7, 102, 25);
-        atmosphere
-            .lineStyle(2, 0x83acb6, 0.32)
-            .strokeRect(ax + 7, ay + 7, 102, 25);
-        atmosphere
-            .lineStyle(2, 0x7596a7, 0.55)
-            .lineBetween(ax + 40, ay + 9, ax + 63, ay + 28)
-            .lineBetween(ax + 63, ay + 28, ax + 79, ay + 17);
-        atmosphere
-            .fillStyle(0xb74a3d, 0.8)
-            .fillRect(m.x + ROOM_W - 90, m.y + 24, 32, 9);
-        for (let h = 0; h < 7; h++) {
-            atmosphere
-                .fillStyle(h % 2 === 0 ? 0x8b6c3b : 0x1c252d, 0.63)
-                .fillRect(m.x + 55 + h * 24, m.y + ROOM_H - 42, 18, 8);
-        }
-        atmosphere
-            .lineStyle(2, 0x314a55, 0.75)
-            .lineBetween(
-                m.x + ROOM_W - 40,
-                m.y + 65,
-                m.x + ROOM_W - 42,
-                m.y + 118,
-            )
-            .lineBetween(
-                m.x + ROOM_W - 42,
-                m.y + 118,
-                m.x + ROOM_W - 24,
-                m.y + 144,
-            );
-        // Broken fluorescents and shallow pools of warm/teal light. No shadows that hide clues.
-        const lampX = m.cx + rng.int(-70, 70),
-            lampY = m.cy + rng.int(-65, 65);
-        const glow = scene.add
-            .ellipse(
-                lampX,
-                lampY,
-                420,
-                330,
-                rng.next() < 0.45 ? 0x47adbc : 0xf2c06c,
-                0.18,
-            )
+
+        // Gentle dynamic flicker complements the baked pixel light, without
+        // the former large opaque-looking ellipses masking the floor detail.
+        const lampX = m.cx + rng.int(-70, 70);
+        const lampY = m.cy + rng.int(-65, 65);
+        const tint = rng.next() < 0.45 ? 0x47adbc : 0xf2c06c;
+        const glow = scene.add.ellipse(lampX, lampY, 340, 250, tint, 0.065)
             .setDepth(-120);
-        const bulb = scene.add
-            .rectangle(lampX, lampY - 205, 46, 9, 0xd9c993, 0.72)
+        const bulb = scene.add.rectangle(lampX, lampY - 205, 46, 9, 0xd9c993, 0.72)
             .setDepth(10);
         scene.add.rectangle(lampX, lampY - 217, 62, 6, 0x1e2836).setDepth(9);
         lights.push({
@@ -575,67 +592,52 @@ export function buildQuestFindingMap(
             phase: rng.next() * Math.PI * 2,
             unstable: rng.next() < 0.55,
         });
-        const name = scene.add
-            .text(m.cx, m.y + 70, `${m.sector} / ${m.title}`, {
-                fontFamily: '"Press Start 2P", monospace',
-                fontSize: "12px",
-                color: "#A6C4D3",
-                backgroundColor: "#07121D",
-                padding: { x: 10, y: 8 },
-            })
-            .setOrigin(0.5)
-            .setDepth(m.y + 70);
-        void name;
-        // A few scattered papers and damaged floor markers provide environmental storytelling.
-        const grit = scene.add.graphics().setDepth(-70);
+
+        // A compact area label stays readable against the detailed environment.
+        scene.add.text(m.cx, m.y + 70, `${m.sector} / ${m.title}`, {
+            fontFamily: '"Press Start 2P", monospace',
+            fontSize: "11px",
+            color: "#B2CED8",
+            backgroundColor: "#07121D",
+            padding: { x: 9, y: 6 },
+        }).setOrigin(0.5).setDepth(m.y + 70);
+
+        // Keep the old floor-grit RNG calls so downstream seeded drone locations
+        // remain identical; the grit itself is now baked into the room texture.
         for (let d = 0; d < 22; d++) {
-            const xx = m.x + rng.int(25, ROOM_W - 25),
-                yy = m.y + rng.int(24, ROOM_H - 24);
-            grit.fillStyle(
-                rng.pick([0x5e7680, 0x645b4a, 0x364a59]),
-                rng.next() * 0.28,
-            ).fillRect(xx, yy, rng.int(3, 12), rng.int(2, 7));
+            rng.int(25, ROOM_W - 25);
+            rng.int(24, ROOM_H - 24);
+            rng.pick([0x5e7680, 0x645b4a, 0x364a59]);
+            rng.next();
+            rng.int(3, 12);
+            rng.int(2, 7);
         }
     }
+    // Formerly, stations were visible Phaser Graphics with ZERO collision.
+    // Give every 3D station a real, matching blocker while preserving a generous
+    // [E] approach distance (QuestFinding.ts uses 76, or 94 for the vault).
+    const roomThemeAt = (x: number, y: number) => {
+        const module = modules.find((m) => x >= m.x && x < m.x + ROOM_W && y >= m.y && y < m.y + ROOM_H);
+        return themeFor(module?.title ?? "RECEPTION");
+    };
     for (const spec of INTERACTABLES) {
-        const g = scene.add.graphics();
-        g.fillStyle(0x000000, 0.48).fillEllipse(0, 12, 92, 22);
-        const color =
-            spec.kind === "evidence"
-                ? 0x58d7c6
-                : spec.kind === "vault"
-                  ? 0xfbbf24
-                  : 0x7dd3fc;
-        g.fillStyle(color, 0.13).fillEllipse(0, 0, 74, 53);
-        if (
-            spec.kind === "evidence" ||
-            spec.kind === "decoy" ||
-            spec.kind === "sign"
-        ) {
-            g.fillStyle(0xe6c997).fillRect(-19, -22, 38, 39);
-            g.fillStyle(0xa3542b).fillRect(-8, -27, 14, 7);
-            for (let t = 0; t < 3; t++)
-                g.fillStyle(0x8a6a4c).fillRect(-13, -10 + t * 9, 22 - t * 3, 2);
-        } else {
-            g.fillStyle(0x64502c).fillRect(-31, -38, 62, 79);
-            g.fillStyle(0xfbbf24).fillRect(-26, -32, 52, 5);
-            g.fillStyle(0x0c2b40).fillRect(-24, -22, 48, 49);
-            g.fillStyle(color).fillRect(-16, -8, 32, 4);
-            g.fillRect(-10, 4, 20, 3);
-        }
-        const node = scene.add
-            .container(spec.x, spec.y, [g])
-            .setDepth(spec.y + 11);
-        const t = scene.add
-            .text(0, 42, spec.title, {
-                fontFamily: '"Press Start 2P", monospace',
-                fontSize: "8px",
-                color: "#D0DCE1",
-                backgroundColor: "#07101A",
-                padding: { x: 5, y: 3 },
-            })
-            .setOrigin(0.5);
-        node.add(t);
+        const size = STATION_SIZES[spec.kind];
+        const theme = roomThemeAt(spec.x, spec.y);
+        const key = bakeArt(scene, `cb-qf-v3-station-${spec.id}`,
+            size.w / ART, size.h / ART,
+            (ARCHIVE.seed ^ spec.x ^ (spec.y << 5)) >>> 0,
+            (pen) => paintStation(pen, theme, spec.kind));
+        const icon = scene.add.image(0, 0, key).setScale(ART);
+        const label = scene.add.text(0, size.h / 2 + 8, spec.title, {
+            fontFamily: '"Press Start 2P", monospace',
+            fontSize: "8px", color: "#D0DCE1", backgroundColor: "#07101A",
+            padding: { x: 5, y: 3 },
+        }).setOrigin(0.5, 0);
+        scene.add.container(spec.x, spec.y, [icon, label])
+            .setDepth(spec.y + size.h / 2);
+        // Solid devices have a small 3px drop shadow; no invisible wide ellipses.
+        solid(spec.x - ART / 2, spec.y - ART / 2,
+            size.w - ART * 2, size.h - ART * 2);
     }
     // Arrival pad is visible but isn't a teleport or enemy spawn point.
     const pad = scene.add.graphics().setDepth(ARCHIVE.spawn.y + 1);

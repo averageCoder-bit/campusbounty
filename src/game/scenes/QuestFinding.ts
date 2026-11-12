@@ -209,6 +209,7 @@ export class QuestFinding extends Phaser.Scene {
 
         const camera = this.cameras.main;
         camera.setZoom(WORLD_ZOOM);
+        camera.roundPixels = true; // Preserve crisp 3px environment/player pixels while panning.
         camera.setBounds(0, 0, ARCHIVE.width, ARCHIVE.height);
         camera.fadeIn(220, 5, 11, 23);
 
