@@ -9,6 +9,8 @@ export const BYTE_INTRO_DIALOGUE = [
 
 export interface ByteDialogueOptions {
     onOpenChanged?: (isOpen: boolean) => void;
+    /** Launch the React Byte mentor chat without losing scripted dialogue. */
+    onAskByte?: () => void;
     /** Milliseconds per character; smaller = faster typing. */
     typingSpeedMs?: number;
 }
@@ -36,6 +38,7 @@ export class ByteDialogue {
     private readonly pageCounter: Phaser.GameObjects.Text;
     private readonly advanceHint: Phaser.GameObjects.Text;
     private readonly onOpenChanged?: (isOpen: boolean) => void;
+    private readonly onAskByte?: () => void;
     private readonly typingSpeed: number;
 
     private lines: string[] = [];
@@ -50,6 +53,12 @@ export class ByteDialogue {
         if (!this.opened) return;
         event.preventDefault();
         this.advance();
+    };
+
+    private readonly onAskKey = (event: KeyboardEvent): void => {
+        if (!this.opened || !this.onAskByte) return;
+        event.preventDefault();
+        this.requestMentor();
     };
 
     private readonly onEscapeKey = (event: KeyboardEvent): void => {
@@ -70,9 +79,9 @@ export class ByteDialogue {
     constructor(scene: Phaser.Scene, options: ByteDialogueOptions = {}) {
         this.scene = scene;
         this.onOpenChanged = options.onOpenChanged;
+        this.onAskByte = options.onAskByte;
         this.typingSpeed = Math.max(5, options.typingSpeedMs ?? 27);
-        this.root = scene.add
-            .container(0, 0)
+        this.root = scene.add.container(0, 0)
             .setDepth(12000)
             .setScrollFactor(0)
             .setVisible(false);
@@ -86,19 +95,9 @@ export class ByteDialogue {
         graphics.fillStyle(0xc8899a);
         graphics.fillRect(PANEL_X + 5, PANEL_Y + 5, PANEL_W - 10, PANEL_H - 10);
         graphics.fillStyle(0x6f485b);
-        graphics.fillRect(
-            PANEL_X + 10,
-            PANEL_Y + 10,
-            PANEL_W - 20,
-            PANEL_H - 20,
-        );
+        graphics.fillRect(PANEL_X + 10, PANEL_Y + 10, PANEL_W - 20, PANEL_H - 20);
         graphics.fillStyle(0xffcfb5);
-        graphics.fillRect(
-            PANEL_X + 15,
-            PANEL_Y + 15,
-            PANEL_W - 30,
-            PANEL_H - 30,
-        );
+        graphics.fillRect(PANEL_X + 15, PANEL_Y + 15, PANEL_W - 30, PANEL_H - 30);
 
         // Pixel-art corner joints.
         graphics.fillStyle(0xffe9cf);
@@ -119,47 +118,27 @@ export class ByteDialogue {
         graphics.fillStyle(0x6f485b);
         graphics.fillRect(portraitX, portraitY, portraitW, portraitH);
         graphics.fillStyle(0xe7a5a8);
-        graphics.fillRect(
-            portraitX + 5,
-            portraitY + 5,
-            portraitW - 10,
-            portraitH - 10,
-        );
+        graphics.fillRect(portraitX + 5, portraitY + 5, portraitW - 10, portraitH - 10);
         graphics.fillStyle(0x22354b);
-        graphics.fillRect(
-            portraitX + 11,
-            portraitY + 11,
-            portraitW - 22,
-            portraitH - 22,
-        );
+        graphics.fillRect(portraitX + 11, portraitY + 11, portraitW - 22, portraitH - 22);
         graphics.fillStyle(0x496479, 0.55);
-        graphics.fillRect(
-            portraitX + 16,
-            portraitY + 16,
-            portraitW - 32,
-            portraitH - 32,
-        );
+        graphics.fillRect(portraitX + 16, portraitY + 16, portraitW - 32, portraitH - 32);
         this.root.add(graphics);
 
         // Reuse the existing Byte texture; no new sprite/image assets.
         const portraitCenterX = portraitX + portraitW / 2;
         const portraitCenterY = portraitY + portraitH / 2;
         if (scene.textures.exists(BYTE_TEXTURE)) {
-            const portrait = scene.add
-                .image(portraitCenterX, portraitCenterY, BYTE_TEXTURE)
+            const portrait = scene.add.image(portraitCenterX, portraitCenterY, BYTE_TEXTURE)
                 .setScale(6)
                 .setOrigin(0.5);
             this.root.add(portrait);
         } else {
-            this.root.add(
-                scene.add
-                    .text(portraitCenterX, portraitCenterY, "B", {
-                        fontFamily: FONT,
-                        fontSize: "48px",
-                        color: "#55E8D5",
-                    })
-                    .setOrigin(0.5),
-            );
+            this.root.add(scene.add.text(portraitCenterX, portraitCenterY, "B", {
+                fontFamily: FONT,
+                fontSize: "48px",
+                color: "#55E8D5",
+            }).setOrigin(0.5));
         }
 
         const name = scene.add.text(TEXT_X, PANEL_Y + 29, "BYTE", {
@@ -167,16 +146,11 @@ export class ByteDialogue {
             fontSize: "15px",
             color: "#5E344B",
         });
-        const role = scene.add.text(
-            TEXT_X + 128,
-            PANEL_Y + 34,
-            "YOUR QUEST HALL GUIDE",
-            {
-                fontFamily: FONT,
-                fontSize: "8px",
-                color: "#996F71",
-            },
-        );
+        const role = scene.add.text(TEXT_X + 128, PANEL_Y + 34, "YOUR QUEST HALL GUIDE", {
+            fontFamily: FONT,
+            fontSize: "8px",
+            color: "#996F71",
+        });
         this.root.add([name, role]);
 
         this.body = scene.add.text(TEXT_X, PANEL_Y + 69, "", {
@@ -196,40 +170,50 @@ export class ByteDialogue {
             fontSize: "9px",
             color: "#96616A",
         });
-        this.advanceHint = scene.add
-            .text(PANEL_RIGHT - 32, PANEL_Y + PANEL_H - 42, "", {
-                fontFamily: FONT,
-                fontSize: "9px",
-                color: "#6F485B",
-            })
-            .setOrigin(1, 0);
+        this.advanceHint = scene.add.text(PANEL_RIGHT - 32, PANEL_Y + PANEL_H - 42, "", {
+            fontFamily: FONT,
+            fontSize: "9px",
+            color: "#6F485B",
+        }).setOrigin(1, 0);
         this.root.add([this.pageCounter, this.advanceHint]);
 
         // Clicking the panel completes/advances dialogue without blocking WASD.
-        const clickable = scene.add
-            .zone(
-                PANEL_X + PANEL_W / 2,
-                PANEL_Y + PANEL_H / 2,
-                PANEL_W,
-                PANEL_H,
-            )
-            .setInteractive({ useHandCursor: true });
+        const clickable = scene.add.zone(
+            PANEL_X + PANEL_W / 2,
+            PANEL_Y + PANEL_H / 2,
+            PANEL_W,
+            PANEL_H,
+        ).setInteractive({ useHandCursor: true });
         clickable.on("pointerdown", () => this.advance());
         this.root.add(clickable);
+
+        // The original avatar-box remains nonmodal; the opt-in mentor is a
+        // separate React panel, used only when Q or this button is selected.
+        if (this.onAskByte) {
+            const ask = scene.add.rectangle(TEXT_X + 340, PANEL_Y + PANEL_H - 39,
+                146, 32, 0x5e344b).setStrokeStyle(2, 0xfbbf24)
+                .setInteractive({ useHandCursor: true });
+            const askLabel = scene.add.text(TEXT_X + 340, PANEL_Y + PANEL_H - 39,
+                "Q  ASK BYTE", { fontFamily: FONT, fontSize: "8px", color: "#ffead2" })
+                .setOrigin(0.5);
+            ask.on("pointerdown", (_pointer: Phaser.Input.Pointer, _lx: number, _ly: number,
+                event: Phaser.Types.Input.EventData) => {
+                event.stopPropagation(); this.requestMentor();
+            });
+            this.root.add([ask, askLabel]);
+        }
 
         // Register AFTER MenuOverlay's ESC handler; its guard prevents
         // opening Settings on the same ESC key press used to close dialogue.
         scene.input.keyboard?.on("keydown-ENTER", this.onAdvanceKey);
         scene.input.keyboard?.on("keydown-SPACE", this.onAdvanceKey);
         scene.input.keyboard?.on("keydown-ESC", this.onEscapeKey);
+        scene.input.keyboard?.on("keydown-Q", this.onAskKey);
     }
 
     open(lines: readonly string[] = BYTE_INTRO_DIALOGUE): void {
         if (this.destroyed || this.opened) return;
-        this.lines =
-            lines.length > 0
-                ? [...lines]
-                : ["...Boop? My ghostly thoughts went missing!"];
+        this.lines = lines.length > 0 ? [...lines] : ["...Boop? My ghostly thoughts went missing!"];
         this.lineIndex = 0;
         this.opened = true;
         this.root.setVisible(true);
@@ -239,21 +223,14 @@ export class ByteDialogue {
 
     /** Call once per Game.update while dialogue is open. No scene timer needed. */
     update(delta: number): void {
-        if (!this.opened || this.visibleCharacters >= this.characters.length)
-            return;
+        if (!this.opened || this.visibleCharacters >= this.characters.length) return;
         this.elapsed += Math.max(0, Math.min(delta, 100));
         const count = Math.floor(this.elapsed / this.typingSpeed);
         if (count <= 0) return;
         this.elapsed -= count * this.typingSpeed;
-        this.visibleCharacters = Math.min(
-            this.characters.length,
-            this.visibleCharacters + count,
-        );
-        this.body.setText(
-            this.characters.slice(0, this.visibleCharacters).join(""),
-        );
-        if (this.visibleCharacters === this.characters.length)
-            this.updateHint();
+        this.visibleCharacters = Math.min(this.characters.length, this.visibleCharacters + count);
+        this.body.setText(this.characters.slice(0, this.visibleCharacters).join(""));
+        if (this.visibleCharacters === this.characters.length) this.updateHint();
     }
 
     advance(): void {
@@ -273,6 +250,12 @@ export class ByteDialogue {
         }
     }
 
+    private requestMentor(): void {
+        if (!this.opened || !this.onAskByte) return;
+        this.close();
+        this.onAskByte();
+    }
+
     close(): void {
         if (!this.opened) return;
         this.opened = false;
@@ -287,6 +270,7 @@ export class ByteDialogue {
         this.scene.input.keyboard?.off("keydown-ENTER", this.onAdvanceKey);
         this.scene.input.keyboard?.off("keydown-SPACE", this.onAdvanceKey);
         this.scene.input.keyboard?.off("keydown-ESC", this.onEscapeKey);
+        this.scene.input.keyboard?.off("keydown-Q", this.onAskKey);
         this.root.destroy(true);
     }
 
@@ -295,18 +279,15 @@ export class ByteDialogue {
         this.visibleCharacters = 0;
         this.elapsed = 0;
         this.body.setText("");
-        this.pageCounter.setText(
-            `${this.lineIndex + 1} / ${this.lines.length}`,
-        );
+        this.pageCounter.setText(`${this.lineIndex + 1} / ${this.lines.length}`);
         this.advanceHint.setText("WASD: LEAVE   /   TYPING...");
     }
 
     private updateHint(): void {
         this.advanceHint.setText(
             this.lineIndex === this.lines.length - 1
-                ? "WASD: LEAVE   /   ENTER: CLOSE"
-                : "WASD: LEAVE   /   ENTER: NEXT",
+                ? (this.onAskByte ? "Q ASK BYTE   /   ENTER CLOSE" : "WASD: LEAVE   /   ENTER: CLOSE")
+                : (this.onAskByte ? "Q ASK BYTE   /   ENTER NEXT" : "WASD: LEAVE   /   ENTER: NEXT"),
         );
     }
 }
-

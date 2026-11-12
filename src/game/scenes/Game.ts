@@ -9,6 +9,7 @@ import { MouseLeadCamera } from "../systems/MouseLeadCamera";
 import { buildQuestHall, HALL } from "../world/QuestHallMap";
 import { MenuOverlay } from "../ui/MenuOverlay";
 import { ByteDialogue } from "../ui/ByteDialogue";
+import { QuestHallInteractionBridge } from "../ui/QuestHallInteractionBridge";
 import { QuestBoardUI } from "../ui/QuestBoardUI";
 import { AdventurePortalUI } from "../ui/AdventurePortalUI";
 import { getGameSession } from "../data/GameSession";
@@ -37,6 +38,7 @@ export class Game extends Phaser.Scene {
 
     private byteProximity?: ByteProximity;
     private byteDialogue?: ByteDialogue;
+    private questHallBridge?: QuestHallInteractionBridge;
     private boardProximity?: QuestBoardProximity;
     private questBoardUI?: QuestBoardUI;
     private adventurePortal?: AdventurePortal;
@@ -243,6 +245,7 @@ export class Game extends Phaser.Scene {
         // ==========================================
 
         this.byteDialogue = new ByteDialogue(this, {
+            onAskByte: () => this.questHallBridge?.openByte(),
             typingSpeedMs: 27,
 
             onOpenChanged: (open: boolean) => {
@@ -261,6 +264,29 @@ export class Game extends Phaser.Scene {
         });
 
         worldCamera.ignore(this.byteDialogue.getCameraObjects());
+
+        // G5: optional React mentor/profile overlay; player & camera pause only
+        // while a full React panel is open. Existing ESC MenuOverlay is unchanged.
+        this.questHallBridge = new QuestHallInteractionBridge(this, {
+            playerSprite: this.player?.sprite,
+            canOpen: () => !this.menuOverlay?.isOpen && !this.byteDialogue?.isOpen &&
+                !this.questBoardUI?.isOpen && !this.adventurePortalUI?.isOpen,
+            onModalChanged: (open) => {
+                controlsHint.setVisible(!open);
+                if (open) {
+                    this.player?.sprite.setVelocity(0, 0);
+                    this.player?.sprite.anims.stop();
+                    this.physics.world.pause();
+                    this.mouseLead?.setEnabled(false);
+                } else {
+                    this.physics.world.resume();
+                    this.mouseLead?.setEnabled(!this.menuOverlay?.isOpen &&
+                        !this.questBoardUI?.isOpen && !this.adventurePortalUI?.isOpen);
+                }
+            },
+        });
+        worldCamera.ignore(this.questHallBridge.getCameraObjects());
+
 
         // ==========================================
         // 11. QUEST BOARD LEARNING HUB
@@ -349,6 +375,8 @@ export class Game extends Phaser.Scene {
 
             // NPC interaction and dialogue.
             this.byteDialogue?.destroy();
+            this.questHallBridge?.destroy();
+            this.questHallBridge = undefined;
             this.byteDialogue = undefined;
 
             this.byteProximity?.destroy();
@@ -387,6 +415,7 @@ export class Game extends Phaser.Scene {
     }
 
     update(_time: number, delta: number): void {
+        if (this.questHallBridge?.isOpen) return;
         // Shared E input is consumed exactly once each frame.
         const pressedE = this.interactKey
             ? Phaser.Input.Keyboard.JustDown(this.interactKey)

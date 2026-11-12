@@ -1,0 +1,183 @@
+/* G5 Byte & Player interaction panels. Scoped to cbq- prefixed elements. */
+.cbq-backdrop { position:fixed;inset:0; z-index:99999; display:flex;align-items:center;justify-content:center;padding:20px; background:rgba(1,5,14,.88);backdrop-filter:blur(5px);font-family:'Trebuchet MS',Arial,sans-serif;color:#e5edf9;box-sizing:border-box; }
+.cbq-backdrop * {box-sizing:border-box}
+.cbq-shell {position:relative;width:min(940px,96vw);max-height:min(92vh,850px);display:flex;flex-direction:column;min-height:0;background:#0e1d32;border:5px solid #c18c4b;box-shadow:0 0 0 4px #171628,0 0 0 8px #513b32,0 20px 75px rgba(0,0,0,.75);overflow:hidden;}
+.cbq-shell::before {content:'';position:absolute;inset:5px;pointer-events:none;border:1px solid rgba(245,190,88,.3);z-index:4}
+.cbq-corners {position:absolute;inset:0;pointer-events:none;z-index:7}
+.cbq-corners i {position:absolute;width:10px;height:10px;background:#f4dba8;border:3px solid #71422e}
+.cbq-corners i:nth-child(1){top:5px;left:5px}.cbq-corners i:nth-child(2){top:5px;right:5px}.cbq-corners i:nth-child(3){bottom:5px;left:5px}.cbq-corners i:nth-child(4){bottom:5px;right:5px}
+.cbq-topline,.cbq-bottomline {display:flex;align-items:center;justify-content:space-between;gap:12px;background:#091627;padding:16px 27px;color:#f3cb72;font-family:'Press Start 2P',monospace;font-size:10px;line-height:1.6;flex-shrink:0}
+.cbq-topline {border-bottom:3px solid #d7a853}.cbq-topline b {color:#568a99;padding:0 11px}
+.cbq-bottomline {border-top:1px solid #394d66;padding:12px 27px;font-size:7px;color:#8398b0}
+.cbq-close,.cbq-action,.cbq-skip,.cbq-tabs button,.cbq-quick-prompts button {font:inherit;cursor:pointer;touch-action:manipulation}
+.cbq-close {border:2px solid #f6ba3e;background:#172841;padding:10px 12px;color:#fff1c7;font-family:'Press Start 2P',monospace;font-size:8px;white-space:nowrap;}
+.cbq-close:hover,.cbq-action:hover:not(:disabled),.cbq-quick-prompts button:hover {background:#284768;color:white}
+.cbq-close kbd {margin-left:8px;opacity:.75;font:inherit}
+.cbq-content {padding:22px 27px 20px;display:flex;flex-direction:column;gap:18px;min-height:0;overflow:auto;background:linear-gradient(145deg,rgba(40,61,89,.26),transparent 50%),repeating-linear-gradient(0deg,transparent 0 31px,rgba(97,132,154,.035) 32px),#101e34}
+.cbq-hero {display:flex;align-items:center;gap:20px;min-width:0}
+.cbq-avatar {flex-shrink:0;width:86px;height:90px;position:relative;border:4px solid #5b7b91;background:linear-gradient(#264258,#0c1f36);display:grid;place-items:center;color:#72b9d5}
+.cbq-avatar span {font-size:45px;line-height:1}
+.cbq-avatar img {max-width:70%;height:75%;width:auto;object-fit:contain;image-rendering:pixelated;}
+.cbq-avatar small {position:absolute;bottom:-11px;right:-9px;background:#13283a;padding:5px;color:#fbbf24;font:9px 'Press Start 2P',monospace;border:1px solid #d2a455}
+.cbq-hero-copy {min-width:0;flex:1}.cbq-hero-copy h2,.cbq-byte-title h2 {font:18px/1.5 'Press Start 2P',monospace;color:#f6cf75;margin:8px 0 7px}
+.cbq-hero-copy p,.cbq-byte-title p {font-size:13px;color:#9fb8d2;margin:0}
+.cbq-eyebrow {font:8px/1.8 'Press Start 2P',monospace;color:#67d2c6}
+.cbq-coin-card {padding:13px 17px;background:#13263e;border:2px solid #536a7b;white-space:nowrap;text-align:right}
+.cbq-coin-card span,.cbq-coin-card strong {display:block}.cbq-coin-card span {font:8px 'Press Start 2P',monospace;color:#91a5b9}.cbq-coin-card strong {font:15px 'Press Start 2P',monospace;color:#f6be60;margin-top:10px}
+.cbq-profile-xp {padding:14px 16px;background:#0a1728;border:1px solid #344d68}
+.cbq-profile-xp > div:first-child {display:flex;justify-content:space-between;gap:15px;margin-bottom:12px;font:8px 'Press Start 2P',monospace;color:#add3eb}
+.cbq-profile-xp strong {color:#f6ce7a}
+.cbq-xp-track {height:15px;background:#192b42;border:2px solid #4c718a;padding:2px}
+.cbq-xp-track > div {height:100%;background:repeating-linear-gradient(90deg,#5cdecb 0 19px,#2ea6ac 19px 22px);transition:width .22s ease}
+.cbq-tabs {display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;flex-shrink:0}
+.cbq-tabs button {background:#0d1c2e;border:2px solid #435b75;padding:13px 8px;color:#a9bfd2;text-align:center}
+.cbq-tabs button.active,.cbq-tabs button[aria-selected=true] {background:#253954;border-color:#ebad4a;color:#f8d788}
+.cbq-tabs b,.cbq-tabs small {display:block}.cbq-tabs b {font:9px 'Press Start 2P',monospace}.cbq-tabs small {font-size:11px;margin-top:8px}
+.cbq-tab-panel {min-height:215px}
+.cbq-twocol {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.cbq-info-card {background:rgba(13,29,48,.95);border:2px solid #344e6c;padding:19px;min-width:0;min-height:212px}
+.cbq-info-card h3 {font:10px/1.7 'Press Start 2P',monospace;color:#76d4c9;margin:0 0 16px;border-bottom:1px solid #42617b;padding-bottom:12px}
+.cbq-info-card p {font-size:14px;line-height:1.65;color:#b2c5db;margin:0 0 12px}
+.cbq-stat-row {display:flex;align-items:baseline;justify-content:space-between;gap:14px;padding:10px 0;border-bottom:1px solid #294058;color:#aabed3;font-size:13px}
+.cbq-stat-row b {font:9px/1.5 'Press Start 2P',monospace;color:#f0cf81;text-align:right}
+.cbq-large-number {font:30px 'Press Start 2P',monospace;color:#f2cc78;margin-bottom:14px}
+.cbq-large-number small {display:block;font:8px 'Press Start 2P',monospace;color:#a6bdd1;margin-top:12px}
+.cbq-badges {min-height:240px}.cbq-badge-row {display:flex;gap:13px;padding:11px 0;border-bottom:1px solid #2b4358}
+.cbq-badge-glyph {font-size:23px;color:#f8cc74}.cbq-badge-row strong {font:10px 'Press Start 2P',monospace;color:#e8dbaa}.cbq-badge-row small {display:block;font-size:12px;color:#9fb3c7;margin-top:8px}
+.cbq-info-card .cbq-disclaimer {margin-top:12px;font-size:11px;color:#879eb2}
+.cbq-actions {display:flex;gap:12px;justify-content:flex-end;flex-wrap:wrap}
+.cbq-action {background:#142a42;color:#e4f4ff;border:2px solid #5981a0;padding:12px 14px;font:9px/1.6 'Press Start 2P',monospace}
+.cbq-primary {background:#e8ad4e;border-color:#f6d98f;color:#152239}
+.cbq-primary:hover:not(:disabled) {background:#ffcf72;color:#102138}
+.cbq-action:disabled {opacity:.55;cursor:not-allowed}
+.cbq-byte-content {flex:1;min-height:0}
+.cbq-byte-title {display:flex;align-items:center;gap:19px;flex-shrink:0}
+.cbq-byte-face {width:94px;height:86px;display:grid;place-content:center;gap:7px;text-align:center;flex-shrink:0;border:4px solid #325469;background:#132e39;border-radius:40% 40% 34% 34%;box-shadow:0 0 22px rgba(82,221,197,.21),inset 0 0 20px rgba(59,171,166,.17)}
+.cbq-byte-eyes {font-size:22px;letter-spacing:6px;color:#f5c76a}.cbq-byte-face span {font:10px 'Press Start 2P',monospace;color:#70f1d5}
+.cbq-chat-log {display:flex;flex-direction:column;gap:12px;min-height:190px;max-height:330px;overflow:auto;background:#071323;border:2px solid #365471;padding:17px;scrollbar-color:#3c6277 #071323}
+.cbq-chat-line {align-self:flex-start;max-width:88%;padding:13px 16px;background:#173149;border-left:4px solid #5ad5c2}
+.cbq-chat-line.cbq-is-player {align-self:flex-end;background:#34263d;border-left:none;border-right:4px solid #f0b86d}
+.cbq-speaker {color:#87e3d2;font:8px 'Press Start 2P',monospace}.cbq-is-player .cbq-speaker {color:#f7cc8b}
+.cbq-chat-line p {color:#e6edf6;font-size:15px;line-height:1.6;margin:10px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}
+.cbq-skip {border:0;background:transparent;color:#8eeadc;font-size:10px;cursor:pointer;margin-top:8px;padding:0}
+.cbq-quick-prompts {display:flex;gap:7px;flex-wrap:wrap}
+.cbq-quick-prompts button {background:#20324b;color:#accbdf;border:1px solid #456582;padding:8px 10px;font-size:12px;text-align:left}
+.cbq-compose {display:flex;flex-direction:column;gap:8px}.cbq-compose label {font:8px 'Press Start 2P',monospace;color:#f6c96e}
+.cbq-compose > div {display:flex;align-items:stretch;gap:10px}
+.cbq-compose textarea {flex:1;min-height:70px;resize:vertical;background:#08162a;border:2px solid #51728a;color:#f0f6fd;padding:12px;font:14px/1.45 'Trebuchet MS',Arial,sans-serif;outline-offset:2px;min-width:0}
+.cbq-compose textarea:focus {outline:2px solid #f2c771}
+.cbq-compose small {font-size:10px;line-height:1.5;color:#8b9fb5}
+.cbq-error {padding:8px 12px;color:#ffd7d7;background:#622e39;border:1px solid #bd707b;font-size:13px;margin:0}
+.cbq-shell button:focus-visible {outline:3px solid #fff2b2;outline-offset:3px}
+@media (max-width:690px) {
+ .cbq-backdrop {padding:10px}.cbq-shell {width:100%;max-height:96vh}
+ .cbq-topline,.cbq-bottomline {padding:12px 18px;font-size:8px}.cbq-topline b {padding:0 2px}
+ .cbq-close {font-size:7px}.cbq-close kbd,.cbq-bottomline span:last-child {display:none}
+ .cbq-content {padding:16px;gap:12px}.cbq-hero {gap:12px;flex-wrap:wrap}
+ .cbq-hero-copy h2,.cbq-byte-title h2 {font-size:13px}.cbq-avatar {width:62px;height:68px}
+ .cbq-coin-card {width:100%;text-align:left}.cbq-tabs {grid-template-columns:repeat(2,minmax(0,1fr))}
+ .cbq-twocol {grid-template-columns:1fr}.cbq-info-card {min-height:unset}
+ .cbq-compose > div {flex-wrap:wrap}.cbq-compose textarea {flex-basis:100%}.cbq-byte-face {width:70px;height:70px}
+ .cbq-profile-xp>div:first-child {font-size:7px}
+}
+@media(prefers-reduced-motion:reduce){.cbq-backdrop *{transition:none!important;animation:none!important}}
+
+.cbq-upgrade-grid {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px;margin:15px 0}
+.cbq-upgrade {padding:12px;background:#162d42;border:1px solid #344c66;display:flex;flex-direction:column;align-items:flex-start;gap:8px}
+.cbq-upgrade strong {font:9px 'Press Start 2P',monospace;color:#dfbb7f}.cbq-upgrade small {color:#abbfd2;font-size:12px}
+.cbq-upgrade button {background:#233447;color:#788ba2;border:1px solid #45586d;padding:7px 9px;font:7px 'Press Start 2P',monospace}
+@media(max-width:690px){.cbq-tabs{grid-template-columns:repeat(2,minmax(0,1fr))}.cbq-upgrade-grid{grid-template-columns:1fr}}
+
+/* G5.1.1 — Quest Hall panel layout fix (append to quest-hall-panels.css)
+   Keeps the original pixel-art skin and all interactions intact.
+   On desktop, the main shell has a definite viewport-constrained height so
+   the flex children can shrink and scroll without covering footer controls. */
+
+.cbq-shell {
+    height: min(850px, 92vh);
+    height: min(850px, 92dvh);
+}
+
+/* PLAYER PROFILE: hero, XP, tabs, and actions stay visible.
+   Only the content for the selected tab scrolls. */
+.cbq-content.cbq-player-content {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+}
+.cbq-player-content > .cbq-hero,
+.cbq-player-content > .cbq-profile-xp,
+.cbq-player-content > .cbq-tabs,
+.cbq-player-content > .cbq-actions {
+    flex: 0 0 auto;
+}
+.cbq-player-content > .cbq-tab-panel {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+    scrollbar-color: #52758e #0a1728;
+    scrollbar-gutter: stable;
+    padding-right: 8px;
+}
+.cbq-player-content > .cbq-actions {
+    padding-top: 12px;
+    border-top: 1px solid #344e6c;
+}
+
+/* BYTE: chat messages scroll independently of the composer and back button. */
+.cbq-content.cbq-byte-content {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+}
+.cbq-byte-content > .cbq-byte-title,
+.cbq-byte-content > .cbq-quick-prompts,
+.cbq-byte-content > .cbq-compose,
+.cbq-byte-content > .cbq-actions,
+.cbq-byte-content > .cbq-error {
+    flex: 0 0 auto;
+}
+.cbq-byte-content > .cbq-chat-log {
+    flex: 1 1 auto;
+    min-height: 80px;
+    max-height: none;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+.cbq-byte-content .cbq-compose textarea {
+    max-height: 115px;
+}
+
+/* Small screens: permit whole-profile scrolling rather than squeezing
+   the five tabs and profile cards to unreadable heights. Keep footer actions
+   reachable and visually separated from the cards. */
+@media (max-width: 690px), (max-height: 620px) {
+    .cbq-content.cbq-player-content {
+        overflow-y: auto;
+        overflow-x: hidden;
+    }
+    .cbq-player-content > .cbq-tab-panel {
+        flex: 0 0 auto;
+        min-height: 0;
+        overflow: visible;
+        padding-right: 0;
+    }
+    .cbq-player-content > .cbq-actions {
+        position: sticky;
+        bottom: -1px;
+        z-index: 1;
+        background: #101e34;
+        padding-bottom: 5px;
+    }
+    .cbq-content.cbq-byte-content {
+        overflow-y: auto;
+        overflow-x: hidden;
+    }
+    .cbq-byte-content > .cbq-chat-log {
+        flex: 0 0 auto;
+        min-height: 120px;
+        max-height: 33vh;
+    }
+}
