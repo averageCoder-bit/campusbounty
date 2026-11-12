@@ -2,11 +2,15 @@ import * as Phaser from "phaser";
 import { EventBus } from "../EventBus";
 import { Player } from "../entities/Player";
 import { ByteProximity } from "../entities/ByteProximity";
+import { QuestBoardProximity } from "../entities/QuestBoardProximity";
+import { AdventurePortal } from "../entities/AdventurePortal";
 import { TopDownDepthSystem } from "../systems/TopDownDepthSystem";
 import { MouseLeadCamera } from "../systems/MouseLeadCamera";
 import { buildQuestHall, HALL } from "../world/QuestHallMap";
 import { MenuOverlay } from "../ui/MenuOverlay";
 import { ByteDialogue } from "../ui/ByteDialogue";
+import { QuestBoardUI } from "../ui/QuestBoardUI";
+import { AdventurePortalUI } from "../ui/AdventurePortalUI";
 
 /**
  * CampusBounty — Quest Hall
@@ -21,6 +25,9 @@ import { ByteDialogue } from "../ui/ByteDialogue";
  * - Byte NPC proximity interaction
  * - Full-width animated dialogue
  * - Walk-away dialogue dismissal
+ * - Quest Board learning roadmap previews
+ * - Shared E-key dispatch for NPC, Quest Board, and Portal interactions
+ * - Animated Adventure Portal and game-mode selection
  */
 export class Game extends Phaser.Scene {
     private player?: Player;
@@ -29,6 +36,11 @@ export class Game extends Phaser.Scene {
 
     private byteProximity?: ByteProximity;
     private byteDialogue?: ByteDialogue;
+    private boardProximity?: QuestBoardProximity;
+    private questBoardUI?: QuestBoardUI;
+    private adventurePortal?: AdventurePortal;
+    private adventurePortalUI?: AdventurePortalUI;
+    private interactKey?: Phaser.Input.Keyboard.Key;
 
     private readonly depthSystem = new TopDownDepthSystem();
 
@@ -99,6 +111,22 @@ export class Game extends Phaser.Scene {
         // This system handles proximity and the E prompt.
 
         this.byteProximity = new ByteProximity(this);
+        this.boardProximity = new QuestBoardProximity(this);
+
+        // Magical arch in the back-center of the hall, between Byte and the
+        // learning noticeboard. Includes its own feet-based interaction area.
+        this.adventurePortal = new AdventurePortal(this, 512, 360);
+        this.physics.add.collider(
+            this.player.sprite,
+            this.adventurePortal.collider,
+        );
+
+        // Read E once per frame: Phaser JustDown consumes the event.
+        // ByteProximity.update must accept the optional pressedE argument
+        // from the G3.1 patch so both interactions can share the same key.
+        this.interactKey = this.input.keyboard?.addKey(
+            Phaser.Input.Keyboard.KeyCodes.E,
+        );
 
         // ==========================================
         // 7. INDEPENDENT HUD CAMERA
@@ -129,7 +157,7 @@ export class Game extends Phaser.Scene {
             .text(
                 HALL.width / 2,
                 734,
-                "WASD MOVE   E TALK   MOUSE LOOK   ESC SETTINGS",
+                "WASD MOVE   E INTERACT   MOUSE LOOK   ESC SETTINGS",
                 {
                     fontFamily: '"Press Start 2P", monospace',
                     fontSize: "11px",
@@ -150,7 +178,10 @@ export class Game extends Phaser.Scene {
             avatarTextureKey: this.player.sprite.texture.key,
 
             // Settings cannot open during Byte's dialogue.
-            canToggleSettings: () => !this.byteDialogue?.isOpen,
+            canToggleSettings: () =>
+                !this.byteDialogue?.isOpen &&
+                !this.questBoardUI?.isOpen &&
+                !this.adventurePortalUI?.isOpen,
 
             progress: {
                 displayName: "STUDENT",
@@ -161,10 +192,16 @@ export class Game extends Phaser.Scene {
 
             onPauseChanged: (paused: boolean) => {
                 // Only Settings should pause the camera.
-                this.mouseLead?.setEnabled(!paused);
+                this.mouseLead?.setEnabled(
+                    !paused &&
+                        !this.questBoardUI?.isOpen &&
+                        !this.adventurePortalUI?.isOpen,
+                );
 
                 if (paused) {
                     this.byteProximity?.hide();
+                    this.boardProximity?.hide();
+                    this.adventurePortal?.hide();
 
                     this.player?.sprite.setVelocity(0, 0);
 
@@ -212,10 +249,81 @@ export class Game extends Phaser.Scene {
         worldCamera.ignore(this.byteDialogue.getCameraObjects());
 
         // ==========================================
-        // 11. SCENE CLEANUP
+        // 11. QUEST BOARD LEARNING HUB
+        // ==========================================
+
+        // Screen-fixed: rendered on the 1x HUD camera only.
+        this.questBoardUI = new QuestBoardUI(this, {
+            onOpenChanged: (open: boolean) => {
+                controlsHint.setVisible(
+                    !open &&
+                        !this.adventurePortalUI?.isOpen &&
+                        !this.byteDialogue?.isOpen,
+                );
+                this.mouseLead?.setEnabled(
+                    !open &&
+                        !this.adventurePortalUI?.isOpen &&
+                        !this.menuOverlay?.isOpen,
+                );
+                if (open) {
+                    this.player?.sprite.setVelocity(0, 0);
+                    this.player?.sprite.anims.stop();
+                    this.byteProximity?.hide();
+                    this.boardProximity?.hide();
+                    this.adventurePortal?.hide();
+                }
+            },
+        });
+        worldCamera.ignore(this.questBoardUI.getCameraObjects());
+
+        // ==========================================
+        // 12. ADVENTURE PORTAL SELECTION MENU
+        // ==========================================
+
+        this.adventurePortalUI = new AdventurePortalUI(this, {
+            onOpenChanged: (open: boolean) => {
+                controlsHint.setVisible(
+                    !open &&
+                        !this.questBoardUI?.isOpen &&
+                        !this.byteDialogue?.isOpen,
+                );
+                this.mouseLead?.setEnabled(
+                    !open &&
+                        !this.questBoardUI?.isOpen &&
+                        !this.menuOverlay?.isOpen,
+                );
+                if (open) {
+                    this.player?.sprite.setVelocity(0, 0);
+                    this.player?.sprite.anims.stop();
+                    this.byteProximity?.hide();
+                    this.boardProximity?.hide();
+                    this.adventurePortal?.hide();
+                }
+            },
+            // No onLaunch / availableModes until the three actual minigame
+            // scenes exist. Cards preview their designs without faking play.
+        });
+        worldCamera.ignore(this.adventurePortalUI.getCameraObjects());
+
+        // ==========================================
+        // 13. SCENE CLEANUP
         // ==========================================
 
         this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+            // Portal UI, animation, and static collider.
+            this.adventurePortalUI?.destroy();
+            this.adventurePortalUI = undefined;
+            this.adventurePortal?.destroy();
+            this.adventurePortal = undefined;
+
+            // Quest Board UI and proximity.
+            this.questBoardUI?.destroy();
+            this.questBoardUI = undefined;
+
+            this.boardProximity?.destroy();
+            this.boardProximity = undefined;
+            this.interactKey = undefined;
+
             // NPC interaction and dialogue.
             this.byteDialogue?.destroy();
             this.byteDialogue = undefined;
@@ -249,74 +357,87 @@ export class Game extends Phaser.Scene {
         });
 
         // ==========================================
-        // 12. REACT EVENT
+        // 14. REACT EVENT
         // ==========================================
 
         EventBus.emit("current-scene-ready", this);
     }
 
     update(_time: number, delta: number): void {
-        // ==========================================
-        // 1. SETTINGS PAUSE
-        // ==========================================
+        // Shared E input is consumed exactly once each frame.
+        const pressedE = this.interactKey
+            ? Phaser.Input.Keyboard.JustDown(this.interactKey)
+            : false;
 
-        // Settings remain a hard pause.
-        if (this.menuOverlay?.isOpen) {
+        // Settings, learning board, and adventure selector are modal.
+        // Byte dialogue remains non-modal (walk-away closes it).
+        if (
+            this.menuOverlay?.isOpen ||
+            this.questBoardUI?.isOpen ||
+            this.adventurePortalUI?.isOpen
+        ) {
             return;
         }
 
-        // ==========================================
-        // 2. NORMAL GAMEPLAY
-        // ==========================================
-
-        // Always allow movement, even during dialogue.
+        // Movement, depth and camera continue while talking to Byte.
         this.player?.update();
-
-        // Keep player depth sorting active.
         this.depthSystem.update();
-
-        // Keep mouse-leading camera active.
         this.mouseLead?.update(delta);
 
-        // Require all NPC components.
-        if (!this.player || !this.byteProximity || !this.byteDialogue) {
+        if (
+            !this.player ||
+            !this.byteProximity ||
+            !this.boardProximity ||
+            !this.byteDialogue ||
+            !this.questBoardUI ||
+            !this.adventurePortal ||
+            !this.adventurePortalUI
+        ) {
             return;
         }
 
-        // ==========================================
-        // 3. BYTE DIALOGUE
-        // ==========================================
+        const playerSprite = this.player.sprite;
 
         if (this.byteDialogue.isOpen) {
-            // Hide and disable the E prompt while talking.
-            this.byteProximity.update(this.player.sprite, false, () => {});
-
-            // Automatically close when the player
-            // walks outside Byte's interaction area.
-            //
-            // The extra 12px is exit tolerance to
-            // avoid flickering near the boundary.
-            const stillNearby = this.byteProximity.isInRange(
-                this.player.sprite,
-                12,
+            // No prompts or new interactions during an NPC conversation.
+            this.byteProximity.update(playerSprite, false, () => {}, pressedE);
+            this.boardProximity.update(playerSprite, false, () => {}, pressedE);
+            this.adventurePortal.update(
+                playerSprite,
+                false,
+                pressedE,
+                () => {},
             );
 
-            if (!stillNearby) {
+            // Allow walking away to close Byte's dialogue naturally.
+            if (!this.byteProximity.isInRange(playerSprite, 12)) {
                 this.byteDialogue.close();
             } else {
-                // Continue typewriter animation.
                 this.byteDialogue.update(delta);
             }
-
             return;
         }
 
-        // ==========================================
-        // 4. BYTE PROXIMITY CHECK
-        // ==========================================
+        // One E press, one action. Portal > Board > Byte if ranges overlap.
+        const portalNearby = this.adventurePortal.isInRange(playerSprite);
+        const boardNearby = this.boardProximity.isInRange(playerSprite);
 
-        this.byteProximity.update(this.player.sprite, true, () => {
-            this.byteDialogue?.open();
-        });
+        this.adventurePortal.update(playerSprite, true, pressedE, () =>
+            this.adventurePortalUI?.open(),
+        );
+
+        this.boardProximity.update(
+            playerSprite,
+            !portalNearby,
+            () => this.questBoardUI?.open(),
+            pressedE,
+        );
+
+        this.byteProximity.update(
+            playerSprite,
+            !portalNearby && !boardNearby,
+            () => this.byteDialogue?.open(),
+            pressedE,
+        );
     }
 }

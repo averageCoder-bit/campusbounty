@@ -78,9 +78,12 @@ export class ByteProximity {
         player: Phaser.GameObjects.Sprite,
         enabled: boolean,
         onInteract: () => void,
+        pressedE?: boolean,
     ): void {
-        // Consume the E key even when talking so it cannot be buffered.
-        const pressed = Phaser.Input.Keyboard.JustDown(this.interactionKey);
+        // Game.ts reads E once and passes its value to both interactions.
+        // The fallback preserves compatibility with older integrations.
+        const pressed =
+            pressedE ?? Phaser.Input.Keyboard.JustDown(this.interactionKey);
         const canTalk = enabled && this.isInRange(player);
 
         this.prompt.setVisible(canTalk);
