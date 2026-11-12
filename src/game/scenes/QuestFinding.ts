@@ -24,7 +24,7 @@ const GAME_SECONDS = 20 * 60;
 const MAX_HP = 5;
 const EVIDENCE_PER_DISTRICT = 3;
 const DISTRICTS: DistrictId[] = ["source", "approval", "recovery"];
-const WORLD_ZOOM = 1.5;
+const WORLD_ZOOM = 1.25;
 
 type Phase = "explore" | "modal" | "result";
 type ModalKind =
