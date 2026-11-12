@@ -1,573 +1,273 @@
 import * as Phaser from "phaser";
-import {
-    LEARNING_PATHS,
-    type LearningNode,
-    type LearningPath,
-} from "../data/learningPaths";
+import { ACADEMY_TRACKS, type AcademyTrack, type AcademyUnit } from "../data/questAcademyCurriculum";
+import { getAcademyLesson } from "../data/curriculum/academyLessons";
 import { getInteractiveLesson } from "../data/lessonContent";
-import { getLessonMastery } from "../data/LearningProgress";
-import { LessonPanel } from "./LessonPanel";
+import { dailyMasteries, getLessonMastery, getLearningProgress, getReviewQueue,
+    isLearningStorageAvailable, syncAcademyXP } from "../data/LearningProgress";
+import { AcademyLessonPanel } from "./AcademyLessonPanel";
+import { AcademyReviewPanel } from "./AcademyReviewPanel";
+import { LessonPanel } from "./LessonPanel"; // G3.7 authored bridge lessons retained.
+import { drawLearningPath } from "./LearningPathMap";
+import { A, button, hex, panel, text, type Layer } from "./AcademyWidgets";
 
 export interface QuestBoardUIOptions {
     onOpenChanged?: (open: boolean) => void;
-    /** Optional: refresh the Quest Hall's live XP HUD after a new mastery. */
     onProgressChanged?: () => void;
 }
+type View = "home" | "roadmap" | "unit" | "lesson" | "review" | "awards";
 
-const FONT = '"Press Start 2P", monospace';
-const C = {
-    ink: 0x08111f,
-    shadow: 0x020611,
-    frame: 0x8a542b,
-    frameLight: 0xc28a4a,
-    panel: 0x111f35,
-    panelLight: 0x192c47,
-    panelHover: 0x26405c,
-    gold: 0xfbbf24,
-    parchment: 0xf7dfb2,
-    muted: 0xa5b8c9,
-    cyan: 0x7dd3fc,
-    teal: 0x55e8d5,
-} as const;
-
-type Layer = Phaser.GameObjects.Container;
-
-/**
- * G3.7 learning hub. Preserves the G3.1 public API and HUD camera contract.
- * The selected lesson is rendered INSIDE this board, so Game.ts continues to
- * block player input and mouse camera while any learning view is open.
- */
+/** G3.8: scrollable 40-unit academy with 12 fully authored lessons and two G3.7 bridges. */
 export class QuestBoardUI {
     private readonly scene: Phaser.Scene;
     private readonly onOpenChanged?: (open: boolean) => void;
     private readonly onProgressChanged?: () => void;
     private readonly root: Layer;
     private page: Layer;
-    private lessonPanel?: LessonPanel;
     private opened = false;
     private destroyed = false;
-    private selectedPath: LearningPath | null = null;
-    private selectedNodeIndex = 0;
+    private view: View = "home";
+    private selectedTrack?: AcademyTrack;
+    private selectedUnitIndex = 0;
+    private unitScroll = 0;
+    private activePanel?: AcademyLessonPanel | AcademyReviewPanel | LessonPanel;
 
     private readonly onEscapeKey = (event: KeyboardEvent): void => {
         if (!this.opened) return;
         event.preventDefault();
-        if (this.lessonPanel) this.backToRoadmap();
-        else this.close();
+        this.back();
     };
-
     private readonly onKeyboard = (event: KeyboardEvent): void => {
-        if (!this.opened) return;
-        this.lessonPanel?.handleKey(event);
+        if (!this.opened || event.code === "Escape") return;
+        this.activePanel?.handleKey(event);
+    };
+    private readonly onWheel = (_pointer: Phaser.Input.Pointer,
+        _objects: Phaser.GameObjects.GameObject[], _dx: number, dy: number): void => {
+        if (!this.opened || this.view !== "roadmap" || !this.selectedTrack) return;
+        this.unitScroll = Phaser.Math.Clamp(this.unitScroll + (dy > 0 ? 1 : -1), 0, 6);
+        this.renderRoadmap();
     };
 
-    get isOpen(): boolean {
-        return this.opened;
-    }
-
-    getCameraObjects(): Phaser.GameObjects.GameObject[] {
-        return [this.root];
-    }
-
-    constructor(scene: Phaser.Scene, options: QuestBoardUIOptions = {}) {
-        this.scene = scene;
-        this.onOpenChanged = options.onOpenChanged;
-        this.onProgressChanged = options.onProgressChanged;
-        this.root = scene.add
-            .container(0, 0)
-            .setScrollFactor(0)
-            .setDepth(15000)
-            .setVisible(false);
-
-        const dimmer = scene.add
-            .rectangle(0, 0, 1024, 768, C.shadow, 0.84)
-            .setOrigin(0)
-            .setInteractive();
-        this.root.add(dimmer);
-
-        const shell = scene.add.graphics();
-        shell.fillStyle(C.shadow, 0.8).fillRect(75, 68, 896, 654);
-        shell.fillStyle(C.frame).fillRect(64, 56, 896, 654);
-        shell.fillStyle(C.frameLight).fillRect(70, 62, 884, 642);
-        shell.fillStyle(C.ink).fillRect(78, 70, 868, 626);
-        shell.fillStyle(C.panel).fillRect(84, 76, 856, 614);
-        shell.fillStyle(C.gold);
-        shell.fillRect(100, 129, 824, 2);
-        shell.fillRect(100, 623, 824, 2);
-        shell.fillStyle(C.parchment);
-        for (const [x, y] of [
-            [82, 74],
-            [928, 74],
-            [82, 680],
-            [928, 680],
-        ]) {
-            shell.fillRect(x, y, 11, 11);
-            shell.fillStyle(C.frame).fillRect(x + 3, y + 3, 5, 5);
-            shell.fillStyle(C.parchment);
+    get isOpen(): boolean { return this.opened; }
+    getCameraObjects(): Phaser.GameObjects.GameObject[] { return [this.root]; }
+    constructor(scene: Phaser.Scene, opts: QuestBoardUIOptions = {}) {
+        this.scene = scene; this.onOpenChanged = opts.onOpenChanged;
+        this.onProgressChanged = opts.onProgressChanged;
+        this.root = scene.add.container(0, 0).setScrollFactor(0).setDepth(15000).setVisible(false);
+        this.root.add(scene.add.rectangle(0, 0, 1024, 768, A.shadow, .86).setOrigin(0).setInteractive());
+        const frame = scene.add.graphics();
+        frame.fillStyle(0x03050a, .8).fillRect(76, 69, 896, 655);
+        frame.fillStyle(0x8a542b).fillRect(64, 56, 896, 654);
+        frame.fillStyle(0xc28a4a).fillRect(70, 62, 884, 642);
+        frame.fillStyle(A.dark).fillRect(78, 70, 868, 626);
+        frame.fillStyle(A.panel).fillRect(84, 76, 856, 614);
+        frame.fillStyle(A.gold); frame.fillRect(100, 129, 824, 2); frame.fillRect(100, 623, 824, 2);
+        for (const [x, y] of [[82,74],[928,74],[82,680],[928,680]]) {
+            frame.fillStyle(0xf7dfb2).fillRect(x, y, 11, 11);
+            frame.fillStyle(0x8a542b).fillRect(x+3, y+3, 5, 5);
         }
-        this.root.add(shell);
-        this.addText(
-            this.root,
-            105,
-            91,
-            "CAMPUSBOUNTY  /  QUEST BOARD",
-            15,
-            "#FBBF24",
-        );
-        this.addText(
-            this.root,
-            106,
-            116,
-            "LEARN  >  PRACTICE  >  MASTER",
-            9,
-            "#A5B8C9",
-        );
-        this.makeButton(
-            this.root,
-            803,
-            88,
-            125,
-            30,
-            "X  CLOSE",
-            () => this.close(),
-            C.panelLight,
-            C.gold,
-            9,
-        );
-
-        this.page = scene.add.container(0, 0);
-        this.root.add(this.page);
-        this.renderCategories();
+        this.root.add(frame);
+        text(scene, this.root, 104, 91, "CAMPUSBOUNTY  /  QUEST ACADEMY", 13, "#FBBF24", 660, true);
+        text(scene, this.root, 105, 116, "LEARN  >  PRACTICE  >  MASTER  >  PLAY", 8, "#A5B8C9", 650, true);
+        button(scene, this.root, 805, 88, 122, 30, "X CLOSE", () => this.close(), { size: 8 });
+        this.page = scene.add.container(0, 0); this.root.add(this.page);
+        this.renderHome();
         scene.input.keyboard?.on("keydown-ESC", this.onEscapeKey);
         scene.input.keyboard?.on("keydown", this.onKeyboard);
+        scene.input.on("wheel", this.onWheel);
     }
-
     open(): void {
         if (this.destroyed || this.opened) return;
-        this.opened = true;
-        this.selectedPath = null;
-        this.selectedNodeIndex = 0;
-        this.lessonPanel = undefined;
-        this.renderCategories();
-        this.root.setVisible(true);
-        this.onOpenChanged?.(true);
+        const xpRestored = syncAcademyXP(this.scene);
+        this.opened = true; this.selectedTrack = undefined; this.view = "home";
+        this.renderHome(); this.root.setVisible(true); this.onOpenChanged?.(true);
+        if (xpRestored) this.onProgressChanged?.();
     }
-
     close(): void {
-        if (this.destroyed || !this.opened) return;
-        this.opened = false;
-        this.lessonPanel = undefined;
-        this.root.setVisible(false);
-        this.onOpenChanged?.(false);
+        if (!this.opened || this.destroyed) return;
+        this.opened = false; this.activePanel = undefined;
+        this.root.setVisible(false); this.onOpenChanged?.(false);
     }
-
     destroy(): void {
         if (this.destroyed) return;
-        this.destroyed = true;
-        this.opened = false;
-        this.lessonPanel = undefined;
+        this.close(); this.destroyed = true;
         this.scene.input.keyboard?.off("keydown-ESC", this.onEscapeKey);
         this.scene.input.keyboard?.off("keydown", this.onKeyboard);
+        this.scene.input.off("wheel", this.onWheel);
         this.root.destroy(true);
     }
-
-    private clearPage(): void {
-        this.lessonPanel = undefined;
+    private resetPage(): void {
+        this.activePanel = undefined;
         this.page.destroy(true);
-        this.page = this.scene.add.container(0, 0);
-        this.root.add(this.page);
+        this.page = this.scene.add.container(0, 0); this.root.add(this.page);
     }
-
-    private renderCategories(): void {
-        this.clearPage();
-        this.addText(
-            this.page,
-            108,
-            159,
-            "SELECT A LEARNING PATH",
-            14,
-            "#F7DFB2",
-        );
-        this.addText(
-            this.page,
-            108,
-            188,
-            "Master a topic by solving simulated challenges, not by clicking through.",
-            17,
-            "#A5B8C9",
-            790,
-            false,
-        );
-        LEARNING_PATHS.forEach((path, index) =>
-            this.makeCard(108 + index * 416, 228, path),
-        );
-        this.makeFutureCard(
-            108,
-            434,
-            "DATA SCIENCE & AI",
-            "DATA / MODELS / PREDICTIONS",
-        );
-        this.makeFutureCard(
-            524,
-            434,
-            "CYBERSECURITY",
-            "PRIVACY / DEFENSE / THREATS",
-        );
-        this.addText(
-            this.page,
-            108,
-            657,
-            "G3.7  /  TWO PLAYABLE LESSONS  /  XP SAVED THIS SESSION ONLY",
-            9,
-            "#A5B8C9",
-        );
+    private back(): void {
+        if (this.view === "lesson") this.renderUnit();
+        else if (this.view === "unit") this.renderRoadmap();
+        else if (this.view === "roadmap" || this.view === "review" || this.view === "awards") this.renderHome();
+        else this.close();
     }
-
-    private makeCard(x: number, y: number, path: LearningPath): void {
-        const available = path.nodes.filter(
-            (n) => !!getInteractiveLesson(n.id),
-        );
-        const mastered = available.filter(
-            (n) => getLessonMastery(this.scene, n.id).mastered,
-        ).length;
-        const rect = this.scene.add
-            .rectangle(x, y, 392, 178, C.panelLight)
-            .setOrigin(0)
-            .setStrokeStyle(3, path.accent)
-            .setInteractive({ useHandCursor: true });
-        rect.on("pointerover", () => rect.setFillStyle(C.panelHover));
-        rect.on("pointerout", () => rect.setFillStyle(C.panelLight));
-        rect.on("pointerdown", () => this.showPath(path));
-        this.page.add(rect);
-        this.addText(
-            this.page,
-            x + 18,
-            y + 18,
-            path.title,
-            12,
-            this.toHex(path.accent),
-        );
-        this.addText(this.page, x + 18, y + 44, path.subtitle, 8, "#F7DFB2");
-        this.addText(
-            this.page,
-            x + 18,
-            y + 72,
-            path.overview,
-            17,
-            "#E2E8F0",
-            352,
-            false,
-        );
-        this.addText(
-            this.page,
-            x + 18,
-            y + 143,
-            `${mastered}/${available.length} MASTERED   /   OPEN ROADMAP  >`,
-            9,
-            "#FBBF24",
-        );
+    private sectionTitle(title: string, subtitle: string): void {
+        text(this.scene, this.page, 108, 157, title, 13, "#F7DFB2", 795, true);
+        text(this.scene, this.page, 108, 186, subtitle, 13, "#A5B8C9", 795);
     }
-
-    private makeFutureCard(
-        x: number,
-        y: number,
-        title: string,
-        subtitle: string,
-    ): void {
-        const rect = this.scene.add
-            .rectangle(x, y, 392, 147, C.panel)
-            .setOrigin(0)
-            .setStrokeStyle(2, 0x40516b);
-        this.page.add(rect);
-        this.addText(this.page, x + 18, y + 22, title, 12, "#71879d");
-        this.addText(this.page, x + 18, y + 52, subtitle, 9, "#71879d");
-        this.addText(
-            this.page,
-            x + 18,
-            y + 110,
-            "FUTURE EXPANSION  /  LOCKED",
-            9,
-            "#71879d",
-        );
+    private publishedCount(track: AcademyTrack): { done: number; available: number } {
+        const ids = track.units.flatMap((u) => u.lessonIds);
+        return { available: ids.length, done: ids.filter((id) => getLessonMastery(this.scene, id).mastered).length };
     }
-
-    private showPath(path: LearningPath): void {
-        this.selectedPath = path;
-        this.selectedNodeIndex = 0;
-        this.renderPath();
-    }
-
-    private backToRoadmap(): void {
-        if (this.selectedPath) this.renderPath();
-        else this.renderCategories();
-    }
-
-    private showLesson(nodeId: string): void {
-        const lesson = getInteractiveLesson(nodeId);
-        if (!lesson) return;
-        this.clearPage();
-        this.lessonPanel = new LessonPanel(this.scene, this.page, lesson, {
-            onBack: () => this.backToRoadmap(),
-            onProgressChanged: () => this.onProgressChanged?.(),
+    private renderHome(): void {
+        this.view = "home"; this.resetPage();
+        this.sectionTitle("SELECT YOUR LEARNING PATH", "Four curricula, 40 units, guided practice and genuine assessments.");
+        ACADEMY_TRACKS.forEach((track, index) => {
+            const x = 108 + (index % 2) * 417, y = 232 + Math.floor(index / 2) * 181;
+            const { done, available } = this.publishedCount(track);
+            const availableAny = available > 0;
+            const rect = panel(this.scene, this.page, x, y, 395, 162,
+                availableAny ? A.raised : A.panel, track.accent);
+            rect.setInteractive({ useHandCursor: true });
+            rect.on("pointerover", () => rect.setFillStyle(A.hover));
+            rect.on("pointerout", () => rect.setFillStyle(availableAny ? A.raised : A.panel));
+            rect.on("pointerdown", () => this.showTrack(track));
+            text(this.scene, this.page, x + 16, y + 16, track.title, 11, hex(track.accent), 363, true);
+            text(this.scene, this.page, x + 16, y + 43, track.subtitle, 8, "#F7DFB2", 362, true);
+            text(this.scene, this.page, x + 16, y + 68, track.overview, 15, "#D7E3F1", 361);
+            text(this.scene, this.page, x + 16, y + 135,
+                availableAny ? `${done}/${available} LESSONS MASTERED   /   VIEW JOURNEY >` :
+                    "10 UNIT OUTLINE  /  CONTENT IN DEVELOPMENT >", 8,
+                availableAny ? "#55E8D5" : "#94A3B8", 367, true);
         });
+        const reviewCount = getReviewQueue(this.scene).length;
+        const today = dailyMasteries(this.scene);
+        text(this.scene, this.page, 108, 609,
+            `DAILY GOAL ${Math.min(today, 2)}/2   /   ${reviewCount} TO REVIEW   /   ` +
+            (isLearningStorageAvailable() ? "LOCAL SAVE ACTIVE" : "SAVE UNAVAILABLE"),
+            8, "#7DD3FC", 802, true);
+        button(this.scene, this.page, 108, 645, 235, 37, `REVIEW MISTAKES (${reviewCount})`,
+            () => this.renderReview(), { border: A.teal, size: 8 });
+        button(this.scene, this.page, 357, 645, 207, 37, "ACHIEVEMENTS", () => this.renderAwards(), { size: 8 });
+        text(this.scene, this.page, 582, 655, "LOCAL DEMO PROGRESS  /  NOT AN OFFICIAL CREDENTIAL",
+            8, "#A5B8C9", 343, true);
     }
-
-    private renderPath(): void {
-        const path = this.selectedPath;
-        if (!path) return;
-        const selected: LearningNode | undefined =
-            path.nodes[this.selectedNodeIndex];
-        if (!selected) return;
-        this.clearPage();
-        this.addText(
-            this.page,
-            109,
-            158,
-            path.title,
-            13,
-            this.toHex(path.accent),
-        );
-        this.addText(
-            this.page,
-            109,
-            182,
-            "SELECT A TOPIC  /  COMPLETE A MASTERY CHECK TO EARN XP",
-            9,
-            "#A5B8C9",
-        );
-
-        for (const [index, node] of path.nodes.entries()) {
-            const y = 218 + index * 75;
-            const active = index === this.selectedNodeIndex;
-            const implemented = !!getInteractiveLesson(node.id);
-            const mastery = getLessonMastery(this.scene, node.id);
-            const rectangle = this.scene.add
-                .rectangle(
-                    108,
-                    y,
-                    467,
-                    65,
-                    active ? C.panelHover : C.panelLight,
-                )
-                .setOrigin(0)
-                .setStrokeStyle(active ? 3 : 1, active ? path.accent : 0x435873)
-                .setInteractive({ useHandCursor: true });
-            rectangle.on("pointerdown", () => {
-                this.selectedNodeIndex = index;
-                this.renderPath();
-            });
-            this.page.add(rectangle);
-            this.addText(
-                this.page,
-                121,
-                y + 16,
-                String(index + 1).padStart(2, "0"),
-                13,
-                active ? this.toHex(path.accent) : "#FBBF24",
-            );
-            this.addText(
-                this.page,
-                165,
-                y + 10,
-                node.title.toUpperCase(),
-                10,
-                "#E2E8F0",
-                383,
-            );
-            this.addText(
-                this.page,
-                165,
-                y + 34,
-                mastery.mastered
-                    ? "MASTERED  /  REPLAY AVAILABLE"
-                    : implemented
-                      ? "INTERACTIVE LESSON READY"
-                      : "CONTENT COMING SOON",
-                8,
-                mastery.mastered
-                    ? "#55E8D5"
-                    : implemented
-                      ? "#7DD3FC"
-                      : "#788CA3",
-            );
-        }
-
-        const x = 598;
-        const implemented = getInteractiveLesson(selected.id);
-        const mastery = getLessonMastery(this.scene, selected.id);
-        const info = this.scene.add
-            .rectangle(x, 218, 325, 385, C.ink)
-            .setOrigin(0)
-            .setStrokeStyle(2, C.frameLight);
-        this.page.add(info);
-        this.addText(
-            this.page,
-            x + 18,
-            235,
-            mastery.mastered
-                ? "LEARNING NODE  /  MASTERED"
-                : implemented
-                  ? "LEARNING NODE  /  READY"
-                  : "LEARNING NODE  /  PLANNED",
-            8,
-            mastery.mastered ? "#55E8D5" : "#FBBF24",
-        );
-        this.addText(
-            this.page,
-            x + 18,
-            263,
-            selected.title.toUpperCase(),
-            11,
-            this.toHex(path.accent),
-            290,
-        );
-        this.addText(
-            this.page,
-            x + 18,
-            312,
-            selected.summary,
-            16,
-            "#E2E8F0",
-            287,
-            false,
-        );
-        this.addText(
-            this.page,
-            x + 18,
-            383,
-            "LEARNING OBJECTIVE",
-            9,
-            "#FBBF24",
-        );
-        this.addText(
-            this.page,
-            x + 18,
-            408,
-            selected.goal,
-            15,
-            "#E2E8F0",
-            286,
-            false,
-        );
-        this.addText(this.page, x + 18, 493, "TOPICS", 9, "#FBBF24");
-        this.addText(
-            this.page,
-            x + 18,
-            515,
-            selected.topics.join(" / "),
-            12,
-            "#A5B8C9",
-            280,
-            false,
-        );
-        if (implemented) {
-            this.makeButton(
-                this.page,
-                x + 18,
-                556,
-                289,
-                35,
-                mastery.mastered
-                    ? "REPLAY LESSON"
-                    : `START LESSON  /  +${implemented.xpReward} XP`,
-                () => this.showLesson(selected.id),
-                C.panelLight,
-                C.teal,
-                8,
-            );
+    private showTrack(track: AcademyTrack): void {
+        this.selectedTrack = track; this.selectedUnitIndex = 0; this.unitScroll = 0;
+        this.renderRoadmap();
+    }
+    private unitComplete(unit: AcademyUnit): boolean {
+        return unit.status === "published" && unit.lessonIds.length > 0 &&
+            unit.lessonIds.every((id) => getLessonMastery(this.scene, id).mastered);
+    }
+    private renderRoadmap(): void {
+        const track = this.selectedTrack; if (!track) { this.renderHome(); return; }
+        this.view = "roadmap"; this.resetPage();
+        this.sectionTitle(track.title, "Scroll to explore all ten units. Only authored chapters are playable.");
+        drawLearningPath(this.scene, this.page, track, {
+            start: this.unitScroll, selected: this.selectedUnitIndex,
+            completed: (unit) => this.unitComplete(unit),
+            onSelect: (i) => { this.selectedUnitIndex = i; this.renderRoadmap(); },
+            onScroll: (i) => { this.unitScroll = i; this.renderRoadmap(); },
+        });
+        const unit = track.units[this.selectedUnitIndex];
+        panel(this.scene, this.page, 603, 216, 321, 389, A.dark, A.border);
+        text(this.scene, this.page, 621, 238, `UNIT ${String(this.selectedUnitIndex + 1).padStart(2, "0")}`, 10,
+            hex(track.accent), 280, true);
+        text(this.scene, this.page, 621, 274, unit.title.toUpperCase(), 11, "#F7DFB2", 288, true);
+        text(this.scene, this.page, 621, 322, unit.summary, 16, "#E2E8F0", 282);
+        text(this.scene, this.page, 621, 407, "OBJECTIVE", 9, "#55E8D5", 279, true);
+        text(this.scene, this.page, 621, 434, unit.goal, 15, "#E2E8F0", 283);
+        text(this.scene, this.page, 621, 507,
+            unit.status === "published" ? `${unit.lessonIds.length} LESSONS + CAPSTONE` :
+            unit.status === "bridge" ? "G3.7 LEGACY LESSON" : "OUTLINE ONLY; NOT YET PUBLISHED",
+            8, "#A5B8C9", 287, true);
+        button(this.scene, this.page, 621, 550, 286, 41,
+            unit.status === "planned" ? "VIEW OUTLINE" : "OPEN UNIT  >",
+            () => this.renderUnit(), { border: unit.status === "planned" ? A.border : A.teal, size: 9 });
+        button(this.scene, this.page, 108, 644, 185, 38, "< ALL PATHS", () => this.renderHome(), { size: 8 });
+        const p = this.publishedCount(track);
+        text(this.scene, this.page, 323, 656, `${p.done}/${p.available} AUTHORED LESSONS MASTERED`,
+            9, "#A5B8C9", 594, true);
+    }
+    private renderUnit(): void {
+        const track = this.selectedTrack; if (!track) { this.renderHome(); return; }
+        this.view = "unit"; this.resetPage();
+        const unit = track.units[this.selectedUnitIndex];
+        this.sectionTitle(unit.title.toUpperCase(), unit.goal);
+        if (unit.status === "planned") {
+            panel(this.scene, this.page, 108, 220, 816, 380, A.dark, A.border);
+            text(this.scene, this.page, 143, 284, "CURRICULUM OUTLINE — LESSONS NOT PUBLISHED", 11,
+                "#FBBF24", 738, true);
+            text(this.scene, this.page, 143, 339,
+                unit.summary + "\n\nThis unit is shown so you can see the full learning journey. " +
+                "It has no fake mastery state or XP reward.", 19, "#E2E8F0", 731);
         } else {
-            this.addText(
-                this.page,
-                x + 18,
-                565,
-                "MODULE COMING SOON",
-                9,
-                "#71879D",
-            );
+            const total = unit.lessonIds.length;
+            for (let i = 0; i < total; i++) {
+                const id = unit.lessonIds[i];
+                const academy = getAcademyLesson(id);
+                const legacy = getInteractiveLesson(id);
+                const known = academy ?? legacy;
+                const mastered = getLessonMastery(this.scene, id).mastered;
+                const eligible = unit.status === "bridge" || i === 0 ||
+                    unit.lessonIds.slice(0, i).every((prev) => getLessonMastery(this.scene, prev).mastered);
+                const x = 109, y = 216 + i * (total > 1 ? 67 : 91);
+                panel(this.scene, this.page, x, y, 814, total > 1 ? 61 : 82,
+                    mastered ? 0x173e3e : A.raised, mastered ? A.teal : eligible ? A.border : 0x33465a);
+                text(this.scene, this.page, x + 17, y + 12, `${String(i + 1).padStart(2, "0")}  ${known?.title ?? id}`,
+                    10, mastered ? "#55E8D5" : "#E2E8F0", 548, true);
+                text(this.scene, this.page, x + 17, y + 37,
+                    mastered ? "MASTERED  /  REPLAY ALLOWED" : eligible ?
+                        `READY  /  +${known?.xpReward ?? 0} XP ON FIRST MASTERY` :
+                        "LOCKED  /  MASTER PREVIOUS LESSONS FIRST", 8, "#A5B8C9", 545, true);
+                button(this.scene, this.page, x + 630, y + 12, 168, 35,
+                    mastered ? "REPLAY" : eligible ? "START  >" : "LOCKED",
+                    () => { if (eligible) this.showLesson(id); },
+                    { disabled: !eligible || !known, border: mastered ? A.teal : A.gold, size: 8 });
+            }
         }
-
-        this.makeButton(
-            this.page,
-            108,
-            642,
-            170,
-            37,
-            "<  ALL PATHS",
-            () => {
-                this.selectedPath = null;
-                this.renderCategories();
-            },
-            C.panelLight,
-            C.gold,
-            9,
-        );
-        this.addText(
-            this.page,
-            314,
-            660,
-            "MASTERED NODES AWARD XP ONCE PER SESSION",
-            9,
-            "#A5B8C9",
-        );
+        button(this.scene, this.page, 108, 645, 190, 38, "< ROADMAP", () => this.renderRoadmap(), { size: 8 });
+        text(this.scene, this.page, 325, 657,
+            unit.status === "published" ? "CHAPTER CAPSTONE OPENS AFTER ITS PREREQUISITES" :
+                unit.status === "bridge" ? "G3.7 CONTENT PRESERVED  /  OPTIONAL BRIDGE" :
+                    "40 UNITS PLANNED  /  NO PRETEND PROGRESS", 8, "#A5B8C9", 584, true);
     }
-
-    private makeButton(
-        layer: Layer,
-        x: number,
-        y: number,
-        width: number,
-        height: number,
-        label: string,
-        action: () => void,
-        fill: number = C.panelLight,
-        outline: number = C.gold,
-        fontSize = 10,
-    ): void {
-        const rect = this.scene.add
-            .rectangle(x, y, width, height, fill)
-            .setOrigin(0)
-            .setStrokeStyle(2, outline)
-            .setInteractive({ useHandCursor: true });
-        rect.on("pointerover", () => rect.setFillStyle(C.panelHover));
-        rect.on("pointerout", () => rect.setFillStyle(fill));
-        rect.on("pointerdown", action);
-        layer.add(rect);
-        const text = this.addText(
-            layer,
-            x + width / 2,
-            y + height / 2,
-            label,
-            fontSize,
-            "#F7DFB2",
-        );
-        text.setOrigin(0.5);
+    private showLesson(id: string): void {
+        this.view = "lesson"; this.resetPage();
+        const academy = getAcademyLesson(id);
+        if (academy) this.activePanel = new AcademyLessonPanel(this.scene, this.page, academy,
+            () => this.renderUnit(), () => this.onProgressChanged?.());
+        else {
+            const old = getInteractiveLesson(id);
+            if (!old) { this.renderUnit(); return; }
+            this.activePanel = new LessonPanel(this.scene, this.page, old, {
+                onBack: () => this.renderUnit(), onProgressChanged: () => this.onProgressChanged?.(),
+            });
+        }
     }
-
-    private addText(
-        layer: Layer,
-        x: number,
-        y: number,
-        value: string,
-        fontSize: number,
-        color: string,
-        wrapWidth = 0,
-        pixel = true,
-    ): Phaser.GameObjects.Text {
-        const text = this.scene.add.text(x, y, value, {
-            fontFamily: pixel ? FONT : '"Trebuchet MS", Arial, sans-serif',
-            fontSize: `${fontSize}px`,
-            color,
-            lineSpacing: pixel ? 5 : 3,
-            ...(wrapWidth
-                ? { wordWrap: { width: wrapWidth, useAdvancedWrap: true } }
-                : {}),
+    private renderReview(): void {
+        this.view = "review"; this.resetPage();
+        this.activePanel = new AcademyReviewPanel(this.scene, this.page, () => this.renderHome());
+    }
+    private renderAwards(): void {
+        this.view = "awards"; this.resetPage();
+        this.sectionTitle("ACHIEVEMENTS & STUDY PROGRESS", "Earn achievements by passing chapter trials—not by visiting the screen.");
+        const p = getLearningProgress(this.scene);
+        panel(this.scene, this.page, 108, 221, 816, 385, A.dark, A.border);
+        const rows: Array<[string, string, string]> = [
+            ["computing-apprentice", "COMPUTING APPRENTICE", "Master the six Computing Fundamentals lessons"],
+            ["ledger-explorer", "LEDGER EXPLORER", "Master the six Blockchain Foundations lessons"],
+        ];
+        rows.forEach(([key, title, desc], i) => {
+            const y = 249 + i * 137; const unlocked = p.achievements.includes(key);
+            panel(this.scene, this.page, 132, y, 769, 113,
+                unlocked ? 0x183b39 : A.panel, unlocked ? A.teal : A.border);
+            text(this.scene, this.page, 156, y + 18,
+                `${unlocked ? "[ EARNED ]" : "[ LOCKED ]"}  ${title}`, 10,
+                unlocked ? "#55E8D5" : "#A5B8C9", 716, true);
+            text(this.scene, this.page, 156, y + 52, desc, 17, "#D7E3F1", 704);
         });
-        layer.add(text);
-        return text;
-    }
-
-    private toHex(value: number): string {
-        return `#${value.toString(16).padStart(6, "0")}`;
+        text(this.scene, this.page, 133, 555,
+            `LOCAL ACADEMY XP EARNED: ${p.academyXpEarned}    /    TODAY: ${dailyMasteries(this.scene)} LESSONS`,
+            9, "#7DD3FC", 746, true);
+        button(this.scene, this.page, 108, 645, 190, 38, "< ACADEMY", () => this.renderHome(), { size: 8 });
+        text(this.scene, this.page, 319, 653,
+            "DEMO ACHIEVEMENTS ARE NOT VERIFIED CERTIFICATES", 8, "#A5B8C9", 600, true);
     }
 }
-
