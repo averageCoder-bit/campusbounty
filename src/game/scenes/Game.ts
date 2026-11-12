@@ -11,6 +11,7 @@ import { MenuOverlay } from "../ui/MenuOverlay";
 import { ByteDialogue } from "../ui/ByteDialogue";
 import { QuestBoardUI } from "../ui/QuestBoardUI";
 import { AdventurePortalUI } from "../ui/AdventurePortalUI";
+import { getGameSession } from "../data/GameSession";
 
 /**
  * CampusBounty — Quest Hall
@@ -174,6 +175,8 @@ export class Game extends Phaser.Scene {
         // 9. PLAYER HUD / SETTINGS
         // ==========================================
 
+        const session = getGameSession(this);
+
         this.menuOverlay = new MenuOverlay(this, {
             avatarTextureKey: this.player.sprite.texture.key,
 
@@ -185,9 +188,9 @@ export class Game extends Phaser.Scene {
 
             progress: {
                 displayName: "STUDENT",
-                level: 1,
-                xp: 0,
-                xpToNext: 100,
+                level: session.level,
+                xp: session.xp,
+                xpToNext: session.xpToNext,
             },
 
             onPauseChanged: (paused: boolean) => {
@@ -223,6 +226,17 @@ export class Game extends Phaser.Scene {
         });
 
         worldCamera.ignore(this.menuOverlay.getCameraObjects());
+
+        // Local-demo currency is session-only and never represents real tokens.
+        const coinReadout = this.add
+            .text(28, 139, `COINS  ${session.coins}`, {
+                fontFamily: '"Press Start 2P", monospace',
+                fontSize: "9px",
+                color: "#FBBF24",
+            })
+            .setScrollFactor(0)
+            .setDepth(9000);
+        worldCamera.ignore(coinReadout);
 
         // ==========================================
         // 10. BYTE DIALOGUE SYSTEM
@@ -300,8 +314,13 @@ export class Game extends Phaser.Scene {
                     this.adventurePortal?.hide();
                 }
             },
-            // No onLaunch / availableModes until the three actual minigame
-            // scenes exist. Cards preview their designs without faking play.
+            // Only Quest Finding is implemented and playable at this milestone.
+            availableModes: ["quest-finding"],
+            onLaunch: (mode) => {
+                if (mode === "quest-finding") {
+                    this.scene.start("QuestFinding");
+                }
+            },
         });
         worldCamera.ignore(this.adventurePortalUI.getCameraObjects());
 

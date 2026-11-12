@@ -1,6 +1,6 @@
 import * as Phaser from "phaser";
 
-/** Display-only progression. The backend / quest system should own real XP. */
+/** The quest system/backend should be the source of truth for earned XP. */
 export interface PlayerProgress {
     displayName: string;
     level: number;
@@ -10,73 +10,120 @@ export interface PlayerProgress {
 
 export interface MenuOverlayOptions {
     progress?: Partial<PlayerProgress>;
-    /** Pass player.sprite.texture.key to show the actual player sprite as the avatar. */
+    /** Reuse the player's existing sprite texture for the profile portrait. */
     avatarTextureKey?: string;
     onPauseChanged?: (paused: boolean) => void;
     onReturnToMenu?: () => void;
+    /** Prevent Settings from opening over dialogue, the Quest Board, or a portal. */
     canToggleSettings?: () => boolean;
 }
 
-const C = {
-    navy: 0x0b1423,
-    deep: 0x050a14,
-    surface: 0x11243c,
-    surfaceAlt: 0x172f4d,
-    border: 0x3b6384,
-    cyan: 0x7dd3fc,
-    cyanBright: 0x38bdf8,
-    gold: 0xfbbf24,
-    white: 0xe2e8f0,
-    muted: 0x94a3b8,
-    black: 0x000000,
+const COLORS = {
+    bg: 0x080f20,
+    panel: 0x0b172b,
+    panelRaised: 0x122742,
+    panelHover: 0x1a3858,
+    shadow: 0x030713,
+    border: 0x45647e,
+    gold: 0xf5ba47,
+    goldLight: 0xffdc8b,
+    sky: 0x77d9f7,
+    track: 0x07121e,
+    white: 0xe6f2ff,
+    muted: 0x96b3cd,
 } as const;
 
-const SCREEN_W = 1024;
-const SCREEN_H = 768;
-const XP_BAR_W = 198;
-const XP_BAR_H = 12;
-
-/** Render text in the existing title-screen pixel font. */
 const FONT = '"Press Start 2P", monospace';
+const WIDTH = 1024;
+const HEIGHT = 768;
+const XP_FILL_WIDTH = 192;
 
-type UiContainer = Phaser.GameObjects.Container;
+type Layer = Phaser.GameObjects.Container;
+
+type ButtonRef = {
+    shape: Phaser.GameObjects.Rectangle;
+    normal: number;
+    hover: number;
+    border: number;
+    action: () => void;
+};
 
 /**
- * HUD + pause/settings interface for the Quest Hall.
- * - Screen-fixed, independent of the world camera and depth sorting.
- * - Esc opens/closes settings (it does NOT return to MainMenu automatically).
- * - Calls onPauseChanged so Game.ts can pause physics and player movement.
- * - Designed for the existing 1024x768 logical resolution.
+ * CampusBounty HUD + pause menu.
  *
- * This class intentionally owns display state only. No fake server XP or rewards.
+ * Lightweight by design:
+ * - One static Graphics object for each panel's decorations.
+ * - No per-frame drawing, particles, idle tweens, or delayed UI timers.
+ * - Pause menu visibility is immediate, even if Game.ts pauses scene tweens.
+ * - Compatible with the separate HUD camera used in Game.ts.
  */
 export class MenuOverlay {
     private readonly scene: Phaser.Scene;
     private readonly options: MenuOverlayOptions;
-    private readonly hud: UiContainer;
-    private readonly modal: UiContainer;
+    private readonly hud: Layer;
+    private readonly modal: Layer;
 
-    private readonly xpFill: Phaser.GameObjects.Rectangle;
-    private readonly hudLevel: Phaser.GameObjects.Text;
     private readonly hudName: Phaser.GameObjects.Text;
+    private readonly hudLevel: Phaser.GameObjects.Text;
     private readonly hudXp: Phaser.GameObjects.Text;
-    private readonly modalProfile: Phaser.GameObjects.Text;
-    private readonly modalXp: Phaser.GameObjects.Text;
+    private readonly hudFill: Phaser.GameObjects.Rectangle;
+
+    private readonly profileName: Phaser.GameObjects.Text;
+    private readonly profileLevel: Phaser.GameObjects.Text;
+    private readonly profileXp: Phaser.GameObjects.Text;
+    private readonly profileFill: Phaser.GameObjects.Rectangle;
+
     private readonly volumeFill: Phaser.GameObjects.Rectangle;
     private readonly volumeLabel: Phaser.GameObjects.Text;
-    private readonly muteLabel: Phaser.GameObjects.Text;
+    private readonly soundLabel: Phaser.GameObjects.Text;
     private readonly fullscreenLabel: Phaser.GameObjects.Text;
 
-    private readonly escHandler = () => this.toggleSettings();
-    private readonly fullscreenHandler = () => this.refreshFullscreen();
-
+    private readonly buttons: ButtonRef[] = [];
+    private focusIndex = -1;
     private progress: PlayerProgress;
     private opened = false;
     private destroyed = false;
 
+    private readonly keyHandler = (event: KeyboardEvent): void => {
+        if (this.destroyed) return;
+
+        if (event.code === "Escape") {
+            if (event.repeat) return;
+            event.preventDefault();
+            this.toggleSettings();
+            return;
+        }
+
+        if (!this.opened) return;
+
+        if (event.code === "ArrowUp" || event.code === "KeyW") {
+            this.focusBy(-1);
+        } else if (event.code === "ArrowDown" || event.code === "KeyS") {
+            this.focusBy(1);
+        } else if (event.code === "ArrowLeft" || event.code === "KeyA") {
+            this.changeVolume(-0.1);
+        } else if (event.code === "ArrowRight" || event.code === "KeyD") {
+            this.changeVolume(0.1);
+        } else if (
+            (event.code === "Enter" ||
+                event.code === "NumpadEnter" ||
+                event.code === "Space") &&
+            !event.repeat
+        ) {
+            this.buttons[this.focusIndex]?.action();
+        } else {
+            return;
+        }
+        event.preventDefault();
+    };
+
+    private readonly fullscreenHandler = (): void => this.refreshFullscreen();
+
     get isOpen(): boolean {
         return this.opened;
     }
+
+    /** Game.ts uses this to keep the entire UI on the unzoomed HUD camera. */
     getCameraObjects(): Phaser.GameObjects.GameObject[] {
         return [this.hud, this.modal];
     }
@@ -94,215 +141,258 @@ export class MenuOverlay {
             ),
         };
 
-        this.hud = scene.add.container(0, 0).setScrollFactor(0).setDepth(9000);
+        // Two containers only: fixed player HUD and above-everything pause panel.
+        this.hud = scene.add.container(0, 0).setDepth(9000).setScrollFactor(0);
         this.modal = scene.add
             .container(0, 0)
-            .setScrollFactor(0)
-            .setDepth(9100);
+            .setDepth(20000)
+            .setScrollFactor(0);
         this.modal.setVisible(false);
 
-        // ------------------------------------------------------------------
-        // TOP-LEFT PROFILE / XP HUD (width 226, avoids Quest Hall's title).
-        // ------------------------------------------------------------------
-        this.pixelPanel(this.hud, 16, 12, 226, 110);
-        this.pixelPanel(this.hud, 26, 23, 53, 48, C.surfaceAlt, C.border);
+        // ---------------- HUD (16,12 .. 242,122) ----------------
+        const hudArt = scene.add.graphics();
+        this.drawPanel(hudArt, 16, 12, 226, 110, COLORS.bg, COLORS.gold);
+        this.drawPanel(
+            hudArt,
+            26,
+            23,
+            53,
+            49,
+            COLORS.panelRaised,
+            COLORS.border,
+        );
+        this.hud.add(hudArt);
+        this.addAvatar(this.hud, 52, 47, 30, 42);
 
-        const avatarKey = options.avatarTextureKey;
-        if (avatarKey && scene.textures.exists(avatarKey)) {
-            const avatar = scene.add.image(52, 46, avatarKey, 0);
-            avatar.setDisplaySize(30, 42);
-            avatar.setOrigin(0.5);
-            this.hud.add(avatar);
-        } else {
-            // Minimal fallback portrait, so the menu works before Player loads.
-            const avatar = scene.add.graphics();
-            avatar.fillStyle(0x202b3f);
-            avatar.fillRect(41, 29, 24, 10);
-            avatar.fillStyle(0xf1c9a3);
-            avatar.fillRect(42, 38, 22, 14);
-            avatar.fillStyle(0x111827);
-            avatar.fillRect(46, 43, 3, 3);
-            avatar.fillRect(58, 43, 3, 3);
-            avatar.fillStyle(0x60a5fa);
-            avatar.fillRect(39, 53, 28, 13);
-            avatar.fillStyle(C.gold);
-            avatar.fillRect(50, 56, 5, 5);
-            this.hud.add(avatar);
-        }
-
-        this.hudName = this.text(this.hud, 89, 26, "", 10, "#E2E8F0");
-        this.hudLevel = this.text(this.hud, 89, 48, "", 9, "#7DD3FC");
-
-        const settingsButton = this.button(
+        this.hudName = this.addText(this.hud, 89, 31, "", 10, "#E6F2FF");
+        this.hudLevel = this.addText(this.hud, 89, 54, "", 9, "#77D9F7");
+        this.addButton(
             this.hud,
-            178,
+            179,
             40,
-            54,
+            52,
             29,
             "SET",
             8,
             () => this.toggleSettings(),
-            C.surfaceAlt,
+            {
+                normal: COLORS.panelRaised,
+                hover: COLORS.panelHover,
+                border: COLORS.gold,
+            },
+            false,
         );
-        settingsButton.setStrokeStyle(2, C.gold);
 
-        this.hudXp = this.text(this.hud, 28, 81, "", 8, "#BFDFF5");
-        const bg = scene.add.rectangle(28, 98, XP_BAR_W, XP_BAR_H, C.deep);
-        bg.setOrigin(0, 0).setStrokeStyle(2, C.border);
-        this.hud.add(bg);
-        this.xpFill = scene.add.rectangle(
-            30,
-            100,
-            XP_BAR_W - 4,
-            XP_BAR_H - 4,
-            C.cyan,
-        );
-        this.xpFill.setOrigin(0, 0);
-        this.hud.add(this.xpFill);
+        this.hudXp = this.addText(this.hud, 28, 82, "", 8, "#B9DFF0");
+        this.drawTrack(this.hud, 28, 99, 198, 12);
+        this.hudFill = this.addFill(this.hud, 31, 102, XP_FILL_WIDTH, 6);
 
-        // ------------------------------------------------------------------
-        // SETTINGS / PAUSE PANEL
-        // ------------------------------------------------------------------
-        const dimmer = scene.add.rectangle(
-            0,
-            0,
-            SCREEN_W,
-            SCREEN_H,
-            C.black,
-            0.76,
-        );
-        dimmer.setOrigin(0).setInteractive(); // Block clicks to the world.
+        // ---------------- Pause menu background ----------------
+        const dimmer = scene.add
+            .rectangle(0, 0, WIDTH, HEIGHT, 0x000000, 0.73)
+            .setOrigin(0)
+            .setInteractive();
         this.modal.add(dimmer);
 
-        this.pixelPanel(this.modal, 230, 123, 564, 518, C.navy, C.gold);
-        this.text(this.modal, 512, 155, "GAME PAUSED", 22, "#FBBF24", 0.5);
-        this.text(
+        // All framing, accent lines and boxes are batched into ONE static Graphics.
+        const art = scene.add.graphics();
+        this.drawPanel(
+            art,
+            216,
+            102,
+            592,
+            563,
+            COLORS.panel,
+            COLORS.gold,
+            true,
+        );
+        this.drawPanel(
+            art,
+            244,
+            216,
+            536,
+            100,
+            COLORS.panelRaised,
+            COLORS.border,
+        );
+        this.drawPanel(art, 256, 228, 60, 60, COLORS.panel, COLORS.border);
+        this.drawLine(art, 244, 199, 536, COLORS.border);
+        this.drawLine(art, 244, 358, 536, COLORS.border);
+        this.drawLine(art, 244, 510, 536, COLORS.border);
+        this.drawLine(art, 244, 578, 536, COLORS.border);
+        this.modal.add(art);
+
+        // Header
+        this.addText(this.modal, 512, 147, "GAME PAUSED", 22, "#F5BA47", 0.5);
+        this.addText(
             this.modal,
             512,
-            190,
-            "SETTINGS  /  PLAYER PROFILE",
-            10,
-            "#94A3B8",
+            182,
+            "CAMPUSBOUNTY  /  SETTINGS",
+            9,
+            "#96B3CD",
             0.5,
         );
-        this.hLine(this.modal, 262, 211, 500, C.border);
+        this.addText(this.modal, 252, 210, "PLAYER PROFILE", 8, "#77D9F7");
 
-        this.pixelPanel(this.modal, 260, 225, 504, 78, C.surface, C.border);
-        this.text(this.modal, 278, 241, "ADVENTURER", 10, "#7DD3FC");
-        this.modalProfile = this.text(this.modal, 278, 263, "", 11, "#E2E8F0");
-        this.modalXp = this.text(this.modal, 278, 283, "", 8, "#94A3B8");
+        // Profile: uses the same real player sprite as the HUD.
+        this.addAvatar(this.modal, 286, 259, 36, 48);
+        this.profileName = this.addText(
+            this.modal,
+            331,
+            244,
+            "",
+            12,
+            "#E6F2FF",
+        );
+        this.profileLevel = this.addText(
+            this.modal,
+            761,
+            244,
+            "",
+            10,
+            "#77D9F7",
+            1,
+        );
+        this.profileXp = this.addText(this.modal, 331, 275, "", 8, "#96B3CD");
+        this.drawTrack(this.modal, 331, 290, 426, 12);
+        this.profileFill = this.addFill(this.modal, 334, 293, 420, 6);
 
-        this.text(this.modal, 264, 326, "MASTER VOLUME", 11, "#FBBF24");
-        this.button(this.modal, 264, 348, 43, 36, "-", 16, () =>
+        // Settings: direct controls (no nested panels or animations).
+        this.addText(this.modal, 248, 342, "AUDIO & DISPLAY", 10, "#F5BA47");
+        this.addText(this.modal, 251, 392, "VOLUME", 10, "#E6F2FF");
+        this.addButton(this.modal, 387, 376, 42, 36, "-", 14, () =>
             this.changeVolume(-0.1),
         );
-        const volTrack = scene.add.rectangle(319, 355, 253, 20, C.deep);
-        volTrack.setOrigin(0).setStrokeStyle(2, C.border);
-        this.modal.add(volTrack);
-        this.volumeFill = scene.add.rectangle(322, 358, 247, 14, C.cyan);
-        this.volumeFill.setOrigin(0);
-        this.modal.add(this.volumeFill);
-        this.button(this.modal, 588, 348, 43, 36, "+", 16, () =>
+        this.drawTrack(this.modal, 445, 388, 191, 13);
+        this.volumeFill = this.addFill(this.modal, 448, 391, 185, 7);
+        this.addButton(this.modal, 648, 376, 42, 36, "+", 14, () =>
             this.changeVolume(0.1),
         );
-        this.volumeLabel = this.text(
+        this.volumeLabel = this.addText(
             this.modal,
-            678,
-            365,
+            758,
+            394,
             "",
-            10,
-            "#E2E8F0",
+            9,
+            "#E6F2FF",
+            1,
+        );
+
+        this.soundLabel = this.addText(
+            this.modal,
+            375,
+            466,
+            "",
+            9,
+            "#E6F2FF",
             0.5,
         );
-
-        const muteButton = this.button(
+        this.addButton(
             this.modal,
-            264,
-            406,
-            238,
-            45,
-            "",
-            10,
-            () => {
-                this.scene.sound.mute = !this.scene.sound.mute;
-                this.refreshAudio();
-            },
-        );
-        this.muteLabel = muteButton.getData("label") as Phaser.GameObjects.Text;
-
-        const fullscreenButton = this.button(
-            this.modal,
-            522,
-            406,
-            238,
-            45,
+            244,
+            438,
+            262,
+            53,
             "",
             9,
             () => {
-                if (this.scene.scale.isFullscreen) {
-                    this.scene.scale.stopFullscreen();
-                } else {
-                    this.scene.scale.startFullscreen();
-                }
+                scene.sound.mute = !scene.sound.mute;
+                this.refreshAudio();
+            },
+            undefined,
+            true,
+            this.soundLabel,
+        );
+
+        this.fullscreenLabel = this.addText(
+            this.modal,
+            645,
+            466,
+            "",
+            9,
+            "#E6F2FF",
+            0.5,
+        );
+        this.addButton(
+            this.modal,
+            518,
+            438,
+            262,
+            53,
+            "",
+            9,
+            () => {
+                if (scene.scale.isFullscreen) scene.scale.stopFullscreen();
+                else scene.scale.startFullscreen();
                 this.refreshFullscreen();
             },
-        );
-        this.fullscreenLabel = fullscreenButton.getData(
-            "label",
-        ) as Phaser.GameObjects.Text;
-
-        this.hLine(this.modal, 262, 472, 500, C.border);
-        this.text(
-            this.modal,
-            512,
-            491,
-            "WASD / ARROWS  -  MOVE",
-            10,
-            "#94A3B8",
-            0.5,
-        );
-        this.text(
-            this.modal,
-            512,
-            513,
-            "ESC  -  RESUME GAME",
-            10,
-            "#94A3B8",
-            0.5,
+            undefined,
+            true,
+            this.fullscreenLabel,
         );
 
-        this.button(
+        this.addText(
             this.modal,
-            264,
-            550,
-            240,
-            60,
+            512,
+            530,
+            "WASD MOVE    E INTERACT    ESC RESUME",
+            9,
+            "#96B3CD",
+            0.5,
+        );
+        this.addText(
+            this.modal,
+            512,
+            557,
+            "UP / DOWN SELECT  -  ENTER CONFIRM",
+            8,
+            "#96B3CD",
+            0.5,
+        );
+
+        this.addButton(
+            this.modal,
+            244,
+            596,
+            262,
+            53,
             "RESUME",
             12,
             () => this.closeSettings(),
-            C.surfaceAlt,
+            {
+                normal: COLORS.gold,
+                hover: COLORS.goldLight,
+                border: COLORS.goldLight,
+                text: "#101b2b",
+            },
         );
-        this.button(
+        this.addButton(
             this.modal,
             518,
-            550,
-            242,
-            60,
+            596,
+            262,
+            53,
             "MAIN MENU",
             11,
             () => this.returnToMenu(),
-            C.surfaceAlt,
+            {
+                normal: COLORS.panelRaised,
+                hover: COLORS.panelHover,
+                border: COLORS.sky,
+            },
         );
 
-        this.scene.input.keyboard?.on("keydown-ESC", this.escHandler);
-        this.scene.scale.on("enterfullscreen", this.fullscreenHandler);
-        this.scene.scale.on("leavefullscreen", this.fullscreenHandler);
+        // Input: one listener, installed once, removed at shutdown.
+        scene.input.keyboard?.on("keydown", this.keyHandler);
+        scene.scale.on("enterfullscreen", this.fullscreenHandler);
+        scene.scale.on("leavefullscreen", this.fullscreenHandler);
+
         this.refreshProgress(false);
         this.refreshAudio();
         this.refreshFullscreen();
     }
 
-    /** Refresh the bar from your actual quest/backend progression. */
     setProgress(data: Partial<PlayerProgress>, animate = true): void {
         if (this.destroyed) return;
         this.progress = {
@@ -317,7 +407,7 @@ export class MenuOverlay {
         this.refreshProgress(animate);
     }
 
-    /** Local demo helper only; a trusted quest system must authorize actual XP. */
+    /** Demo helper; quest validation must authorize real XP. */
     addXp(amount: number): void {
         if (this.destroyed || !Number.isFinite(amount) || amount <= 0) return;
         this.progress.xp += Math.floor(amount);
@@ -331,12 +421,13 @@ export class MenuOverlay {
 
     openSettings(): void {
         if (this.destroyed || this.opened) return;
-
-        // Prevent Settings from interrupting NPC conversations.
         if (this.options.canToggleSettings?.() === false) return;
 
         this.opened = true;
-        this.modal.setVisible(true);
+        // Show immediately: Game.ts freezes scene tweens in onPauseChanged.
+        this.modal.setAlpha(1).setVisible(true).setDepth(20000);
+        this.scene.children.bringToTop(this.modal);
+        this.focus(4); // Default to Resume, not an audio control.
         this.refreshAudio();
         this.refreshFullscreen();
         this.options.onPauseChanged?.(true);
@@ -358,57 +449,75 @@ export class MenuOverlay {
         if (this.destroyed) return;
         if (this.opened) this.closeSettings();
         this.destroyed = true;
-        this.scene.input.keyboard?.off("keydown-ESC", this.escHandler);
+        this.scene.input.keyboard?.off("keydown", this.keyHandler);
         this.scene.scale.off("enterfullscreen", this.fullscreenHandler);
         this.scene.scale.off("leavefullscreen", this.fullscreenHandler);
+        this.scene.tweens.killTweensOf([this.hudFill, this.profileFill]);
         this.hud.destroy(true);
         this.modal.destroy(true);
     }
 
     private returnToMenu(): void {
-        // Resume before changing scenes: Arcade Physics must not remain paused.
         this.closeSettings();
         this.options.onReturnToMenu?.();
     }
 
+    private focus(index: number): void {
+        if (this.buttons.length === 0) return;
+        this.focusIndex = (index + this.buttons.length) % this.buttons.length;
+        this.buttons.forEach((b, i) => {
+            const selected = i === this.focusIndex;
+            b.shape.setFillStyle(selected ? b.hover : b.normal);
+            b.shape.setStrokeStyle(
+                selected ? 3 : 2,
+                selected ? COLORS.goldLight : b.border,
+            );
+        });
+    }
+
+    private focusBy(direction: number): void {
+        this.focus(this.focusIndex + direction);
+    }
+
     private refreshProgress(animate: boolean): void {
         const p = this.progress;
-        this.hudName.setText(p.displayName.toUpperCase().slice(0, 10));
+        const name = p.displayName.toUpperCase().slice(0, 12);
+        this.hudName.setText(name.slice(0, 8));
         this.hudLevel.setText(`LVL ${String(p.level).padStart(2, "0")}`);
-        this.hudXp.setText(`XP  ${p.xp} / ${p.xpToNext}`);
-        this.modalProfile.setText(
-            `${p.displayName.toUpperCase()}  -  LVL ${p.level}`,
-        );
-        this.modalXp.setText(`XP ${p.xp} / ${p.xpToNext} TO NEXT LEVEL`);
+        this.hudXp.setText(`XP ${p.xp} / ${p.xpToNext}`);
+        this.profileName.setText(name);
+        this.profileLevel.setText(`LEVEL ${p.level}`);
+        this.profileXp.setText(`XP ${p.xp} / ${p.xpToNext}  TO NEXT LEVEL`);
 
-        const fill = Math.min(1, p.xp / p.xpToNext);
-        this.scene.tweens.killTweensOf(this.xpFill);
-        if (animate) {
+        const fill = Phaser.Math.Clamp(p.xp / p.xpToNext, 0, 1);
+        this.scene.tweens.killTweensOf([this.hudFill, this.profileFill]);
+        if (animate && !this.opened) {
             this.scene.tweens.add({
-                targets: this.xpFill,
+                targets: [this.hudFill, this.profileFill],
                 scaleX: fill,
-                duration: 350,
+                duration: 240,
                 ease: "Sine.easeOut",
             });
         } else {
-            this.xpFill.setScale(fill, 1);
+            this.hudFill.setScale(fill, 1);
+            this.profileFill.setScale(fill, 1);
         }
     }
 
     private changeVolume(delta: number): void {
-        const current = this.scene.sound.volume;
-        this.scene.sound.volume = Math.min(
+        this.scene.sound.volume = Phaser.Math.Clamp(
+            Math.round((this.scene.sound.volume + delta) * 10) / 10,
+            0,
             1,
-            Math.max(0, Math.round((current + delta) * 10) / 10),
         );
         this.refreshAudio();
     }
 
     private refreshAudio(): void {
-        const volume = this.scene.sound.volume;
-        this.volumeFill.setScale(Math.min(1, Math.max(0, volume)), 1);
+        const volume = Phaser.Math.Clamp(this.scene.sound.volume, 0, 1);
+        this.volumeFill.setScale(volume, 1);
         this.volumeLabel.setText(`${Math.round(volume * 100)}%`);
-        this.muteLabel.setText(
+        this.soundLabel.setText(
             this.scene.sound.mute ? "SOUND: OFF" : "SOUND: ON",
         );
     }
@@ -421,50 +530,42 @@ export class MenuOverlay {
         );
     }
 
-    private pixelPanel(
-        layer: UiContainer,
+    private addAvatar(
+        layer: Layer,
         x: number,
         y: number,
         w: number,
         h: number,
-        bg: number = C.navy,
-        border: number = C.gold,
     ): void {
+        const key = this.options.avatarTextureKey;
+        if (key && this.scene.textures.exists(key)) {
+            const avatar = this.scene.add.image(x, y, key, 0);
+            avatar.setDisplaySize(w, h);
+            layer.add(avatar);
+            return;
+        }
+
+        // Minimal fallback avatar; drawn once.
         const g = this.scene.add.graphics();
-        g.fillStyle(C.black, 0.55);
-        g.fillRect(x + 5, y + 5, w, h);
-        g.fillStyle(border);
-        g.fillRect(x, y, w, h);
-        g.fillStyle(C.deep);
-        g.fillRect(x + 3, y + 3, w - 6, h - 6);
-        g.fillStyle(bg);
-        g.fillRect(x + 6, y + 6, w - 12, h - 12);
+        g.fillStyle(0x17293f).fillRect(-12, -18, 24, 8);
+        g.fillStyle(0xf1c9a3).fillRect(-11, -10, 22, 15);
+        g.fillStyle(0x17293f).fillRect(-7, -5, 4, 4).fillRect(4, -5, 4, 4);
+        g.fillStyle(0x60a5fa).fillRect(-14, 5, 28, 14);
+        g.fillStyle(COLORS.gold).fillRect(-2, 8, 5, 5);
+        g.setPosition(x, y);
         layer.add(g);
     }
 
-    private hLine(
-        layer: UiContainer,
+    private addText(
+        layer: Layer,
         x: number,
         y: number,
-        w: number,
-        color: number,
-    ): void {
-        const g = this.scene.add.graphics();
-        g.fillStyle(color);
-        g.fillRect(x, y, w, 2);
-        layer.add(g);
-    }
-
-    private text(
-        layer: UiContainer,
-        x: number,
-        y: number,
-        value: string,
+        content: string,
         size: number,
         color: string,
         originX = 0,
     ): Phaser.GameObjects.Text {
-        const t = this.scene.add.text(x, y, value, {
+        const t = this.scene.add.text(x, y, content, {
             fontFamily: FONT,
             fontSize: `${size}px`,
             color,
@@ -475,8 +576,8 @@ export class MenuOverlay {
         return t;
     }
 
-    private button(
-        layer: UiContainer,
+    private addButton(
+        layer: Layer,
         x: number,
         y: number,
         w: number,
@@ -484,24 +585,129 @@ export class MenuOverlay {
         label: string,
         size: number,
         action: () => void,
-        fill: number = C.surface,
+        style: {
+            normal: number;
+            hover: number;
+            border: number;
+            text?: string;
+        } = {
+            normal: COLORS.panelRaised,
+            hover: COLORS.panelHover,
+            border: COLORS.border,
+        },
+        keyboardFocus = true,
+        externalLabel?: Phaser.GameObjects.Text,
     ): Phaser.GameObjects.Rectangle {
-        const bg = this.scene.add.rectangle(x + w / 2, y + h / 2, w, h, fill);
-        bg.setStrokeStyle(2, C.border).setInteractive({ useHandCursor: true });
-        layer.add(bg);
-        const t = this.text(
-            layer,
+        const rect = this.scene.add.rectangle(
             x + w / 2,
             y + h / 2,
-            label,
-            size,
-            "#E2E8F0",
-            0.5,
+            w,
+            h,
+            style.normal,
         );
-        bg.setData("label", t);
-        bg.on("pointerover", () => bg.setFillStyle(C.surfaceAlt));
-        bg.on("pointerout", () => bg.setFillStyle(fill));
-        bg.on("pointerdown", action);
-        return bg;
+        rect.setStrokeStyle(2, style.border).setInteractive({
+            useHandCursor: true,
+        });
+        layer.add(rect);
+        if (!externalLabel) {
+            this.addText(
+                layer,
+                x + w / 2,
+                y + h / 2,
+                label,
+                size,
+                style.text ?? "#E6F2FF",
+                0.5,
+            );
+        } else {
+            // The dynamic label was created first; keep it above the button surface.
+            layer.bringToTop(externalLabel);
+        }
+        if (keyboardFocus) {
+            const index = this.buttons.length;
+            this.buttons.push({
+                shape: rect,
+                normal: style.normal,
+                hover: style.hover,
+                border: style.border,
+                action,
+            });
+            rect.on("pointerover", () => {
+                if (this.opened) this.focus(index);
+            });
+            rect.on("pointerout", () => {
+                if (this.opened) this.focus(this.focusIndex);
+            });
+        } else {
+            rect.on("pointerover", () => rect.setFillStyle(style.hover));
+            rect.on("pointerout", () => rect.setFillStyle(style.normal));
+        }
+        rect.on("pointerdown", action);
+        return rect;
+    }
+
+    private drawTrack(
+        layer: Layer,
+        x: number,
+        y: number,
+        w: number,
+        h: number,
+    ): void {
+        const track = this.scene.add
+            .rectangle(x, y, w, h, COLORS.track)
+            .setOrigin(0)
+            .setStrokeStyle(2, COLORS.border);
+        layer.add(track);
+    }
+
+    private addFill(
+        layer: Layer,
+        x: number,
+        y: number,
+        w: number,
+        h: number,
+    ): Phaser.GameObjects.Rectangle {
+        const fill = this.scene.add
+            .rectangle(x, y, w, h, COLORS.sky)
+            .setOrigin(0);
+        layer.add(fill);
+        return fill;
+    }
+
+    private drawLine(
+        g: Phaser.GameObjects.Graphics,
+        x: number,
+        y: number,
+        w: number,
+        color: number,
+    ): void {
+        g.fillStyle(color, 0.9).fillRect(x, y, w, 2);
+    }
+
+    private drawPanel(
+        g: Phaser.GameObjects.Graphics,
+        x: number,
+        y: number,
+        w: number,
+        h: number,
+        fill: number,
+        border: number,
+        studs = false,
+    ): void {
+        g.fillStyle(COLORS.shadow, 0.6).fillRect(x + 5, y + 6, w, h);
+        g.fillStyle(border).fillRect(x, y, w, h);
+        g.fillStyle(COLORS.bg).fillRect(x + 3, y + 3, w - 6, h - 6);
+        g.fillStyle(fill).fillRect(x + 6, y + 6, w - 12, h - 12);
+        g.fillStyle(0xffffff, 0.05).fillRect(x + 6, y + 6, w - 12, 3);
+        if (studs) {
+            g.fillStyle(COLORS.goldLight);
+            for (const [sx, sy] of [
+                [x + 14, y + 14],
+                [x + w - 17, y + 14],
+                [x + 14, y + h - 17],
+                [x + w - 17, y + h - 17],
+            ])
+                g.fillRect(sx, sy, 4, 4);
+        }
     }
 }

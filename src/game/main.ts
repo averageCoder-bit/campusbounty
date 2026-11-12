@@ -1,9 +1,11 @@
-import { Boot } from "./scenes/Boot";
-import { GameOver } from "./scenes/GameOver";
-import { Game as MainGame } from "./scenes/Game";
-import { MainMenu } from "./scenes/MainMenu";
 import { AUTO, Game, Scale } from "phaser";
+
+import { Boot } from "./scenes/Boot";
 import { Preloader } from "./scenes/Preloader";
+import { MainMenu } from "./scenes/MainMenu";
+import { Game as MainGame } from "./scenes/Game";
+import { GameOver } from "./scenes/GameOver";
+import { QuestFinding } from "./scenes/QuestFinding";
 
 const config: Phaser.Types.Core.GameConfig = {
     type: AUTO,
@@ -11,7 +13,6 @@ const config: Phaser.Types.Core.GameConfig = {
 
     backgroundColor: "#0B1423",
 
-    // Pixel-art rendering
     pixelArt: true,
     roundPixels: true,
 
@@ -30,7 +31,6 @@ const config: Phaser.Types.Core.GameConfig = {
         },
     },
 
-    // Responsive scaling
     scale: {
         mode: Scale.FIT,
         autoCenter: Scale.CENTER_BOTH,
@@ -38,8 +38,14 @@ const config: Phaser.Types.Core.GameConfig = {
         height: 768,
     },
 
-    // Game scenes
-    scene: [Boot, Preloader, MainMenu, MainGame, GameOver],
+    scene: [
+        Boot,
+        Preloader,
+        MainMenu,
+        MainGame, // ✅ Your Quest Hall scene
+        GameOver,
+        QuestFinding,
+    ],
 };
 
 const StartGame = (parent: string) => {
