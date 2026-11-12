@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from "react";
 import { askByte, type MentorTurn } from "../game/services/ByteMentorClient";
 import type { QuestHallSnapshot } from "../game/ui/QuestHallInteractionBridge";
 interface Props { snapshot: QuestHallSnapshot; onClose(): void }
@@ -10,31 +10,38 @@ export function ByteMentorPanel({ snapshot, onClose }: Props) {
     const [draft, setDraft] = useState("");
     const [waiting, setWaiting] = useState(false);
     const [error, setError] = useState("");
-    const [revealed, setRevealed] = useState(0);
-    const [activeReply, setActiveReply] = useState<number | null>(null);
     const counter = useRef(0);
     const scroll = useRef<HTMLDivElement>(null);
     const controller = useRef<AbortController | null>(null);
     const input = useRef<HTMLTextAreaElement>(null);
 
     useEffect(() => () => controller.current?.abort(), []);
-    useEffect(() => {
-        if (activeReply === null) return;
-        const msg = messages.find(m => m.id === activeReply);
-        if (!msg) return;
-        if (revealed >= msg.text.length) { setActiveReply(null); return; }
-        const t = window.setTimeout(() => setRevealed(n => Math.min(msg.text.length, n + 3)), 20);
-        return () => clearTimeout(t);
-    }, [activeReply, revealed, messages]);
-    useEffect(() => { scroll.current?.scrollTo({ top: scroll.current.scrollHeight, behavior: "smooth" }); }, [messages, revealed]);
+    // Reposition only when a message is added or waiting changes.
+    // For long replies, show the BEGINNING so a student can read downward.
+    // Unlike scrolling on every character, this never fights manual scrolling.
+    useLayoutEffect(() => {
+        const log = scroll.current;
+        if (!log) return;
+        const latest = messages[messages.length - 1];
+        if (waiting || !latest || latest.role === "user") {
+            log.scrollTop = log.scrollHeight;
+            return;
+        }
+        const bubble = log.querySelector<HTMLElement>(`[data-byte-message-id="${latest.id}"]`);
+        if (!bubble) return;
+        const logRect = log.getBoundingClientRect();
+        const bubbleRect = bubble.getBoundingClientRect();
+        log.scrollTop += bubbleRect.top - logRect.top - 12;
+    }, [messages.length, waiting]);
 
     const send = async (raw: string) => {
         const question = raw.trim();
         if (!question || waiting || question.length > 450) return;
-        if (activeReply !== null) setActiveReply(null);
         const prior: MentorTurn[] = messages.slice(-6).map(m => ({ role: m.role, text: m.text.slice(0,450) }));
         setMessages(old => [...old, { id: ++counter.current, role: "user", text: question }]);
         setDraft(""); setError(""); setWaiting(true);
+        // Preserve typing focus even when SEND was clicked instead of pressing Enter.
+        requestAnimationFrame(() => input.current?.focus({ preventScroll: true }));
         const abort = new AbortController(); controller.current = abort;
         try {
             const result = await askByte(question, prior, {
@@ -44,7 +51,7 @@ export function ByteMentorPanel({ snapshot, onClose }: Props) {
             if (abort.signal.aborted) return;
             const id = ++counter.current;
             setMessages(old => [...old, { id, role: "model", text: result.reply, source: result.source }]);
-            setRevealed(0); setActiveReply(id);
+            if (result.notice) setError(result.notice);
         } catch (e) {
             if (!abort.signal.aborted) setError(e instanceof Error ? e.message : "Byte could not reply.");
         } finally {
@@ -61,10 +68,9 @@ export function ByteMentorPanel({ snapshot, onClose }: Props) {
         <div className="cbq-chat-log" ref={scroll} role="log" aria-live="polite" aria-label="Conversation with Byte">
             <div className="cbq-chat-line cbq-is-byte"><span className="cbq-speaker">BYTE · QUEST MENTOR</span>
                 <p>Boop! Need help understanding a concept? Ask away. I can guide you, but you'll earn your own victories!</p></div>
-            {messages.map(m => <div key={m.id} className={`cbq-chat-line ${m.role === "model" ? "cbq-is-byte" : "cbq-is-player"}`}>
+            {messages.map(m => <div key={m.id} data-byte-message-id={m.id} className={`cbq-chat-line ${m.role === "model" ? "cbq-is-byte" : "cbq-is-player"}`}>
                 <span className="cbq-speaker">{m.role === "model" ? `BYTE · ${m.source === "gemini" ? "AI TUTOR" : "SCRIPTED GUIDE"}` : "YOU"}</span>
-                <p>{activeReply === m.id ? m.text.slice(0, revealed) : m.text}</p>
-                {activeReply === m.id && <button className="cbq-skip" type="button" onClick={() => setActiveReply(null)}>SHOW FULL REPLY</button>}
+                <p>{m.text}</p>
             </div>)}
             {waiting && <div className="cbq-chat-line cbq-is-byte"><span className="cbq-speaker">BYTE</span><p>Thinking... ✦</p></div>}
         </div>
@@ -76,8 +82,9 @@ export function ByteMentorPanel({ snapshot, onClose }: Props) {
             <label htmlFor="cbq-byte-question">YOUR QUESTION</label>
             <div><textarea ref={input} id="cbq-byte-question" maxLength={450} rows={2} value={draft}
                 onChange={e => setDraft(e.target.value)}
-                onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void send(draft); } }}
-                placeholder="Ask Byte about a lesson, a concept or a challenge..." disabled={waiting}/>
+                onKeyDown={e => { e.stopPropagation(); if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void send(draft); } }}
+                placeholder="Ask Byte about a lesson, a concept or a challenge..."
+                onKeyUp={e => e.stopPropagation()}/>
                 <button type="submit" className="cbq-action cbq-primary" disabled={waiting || !draft.trim()}>SEND ✦</button></div>
             <small>ENTER SENDS · SHIFT+ENTER NEW LINE · ESC CLOSES · BYTE CANNOT AWARD XP</small>
         </form>

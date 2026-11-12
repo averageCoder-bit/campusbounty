@@ -54,15 +54,26 @@ export function QuestHallPanels() {
             }
         };
         window.addEventListener("keydown", closeAndTrap, true);
-        requestAnimationFrame(() => root.current?.querySelector<HTMLElement>("button")?.focus());
+        // Focus the actual chat input when opening Byte, instead of the CLOSE button.
+        // Only one autofocus request, and never override a quick user click.
+        const focusFrame = requestAnimationFrame(() => {
+            const host = root.current;
+            if (!host) return;
+            if (document.activeElement instanceof HTMLElement && host.contains(document.activeElement)) return;
+            const target = panel.kind === "byte"
+                ? host.querySelector<HTMLTextAreaElement>("#cbq-byte-question")
+                : host.querySelector<HTMLButtonElement>("button");
+            target?.focus({ preventScroll: true });
+        });
         return () => {
             window.removeEventListener("keydown", closeAndTrap, true);
+            cancelAnimationFrame(focusFrame);
             document.body.style.overflow = before;
         };
     }, [panel]);
     if (!panel) return null;
     return (
-        <div className="cbq-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) close(); }}>
+        <div className="cbq-backdrop" onMouseDown={e => { e.stopPropagation(); if (e.target === e.currentTarget) close(); }}>
             <div ref={root} className="cbq-shell" role="dialog" aria-modal="true"
                 aria-label={panel.kind === "byte" ? "Talk to Byte" : "Player profile"}>
                 <div className="cbq-corners" aria-hidden="true"><i/><i/><i/><i/></div>
