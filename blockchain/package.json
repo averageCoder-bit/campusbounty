@@ -1,0 +1,18 @@
+{
+  "name": "campusbounty-bsc-testnet",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "deploy:testnet": "hardhat run scripts/deploy.cjs --network bscTestnet",
+    "issue:demo": "node scripts/issue-demo.cjs"
+  },
+  "devDependencies": {
+    "hardhat": "^2.22.19",
+    "@nomicfoundation/hardhat-ethers": "^3.0.8",
+    "@nomicfoundation/hardhat-verify": "^2.0.8",
+    "ethers": "^6.13.4",
+    "dotenv": "^16.4.5"
+  }
+}

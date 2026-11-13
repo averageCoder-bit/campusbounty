@@ -1,0 +1,14 @@
+.cbw3-launch{position:fixed;z-index:40010;right:18px;bottom:18px;background:#0b1e2f;color:#68efe0;border:2px solid #dbaf4f;padding:12px 14px;font:700 10px 'Press Start 2P',monospace;cursor:pointer;box-shadow:0 5px 0 #0008}
+.cbw3-backdrop{position:fixed;z-index:50000;inset:0;display:grid;place-items:center;padding:16px;background:rgba(0,0,0,.85)}
+.cbw3-dialog{box-sizing:border-box;width:min(860px,100%);max-height:92vh;overflow:auto;background:#101d33;color:#d8e8f9;border:4px solid #bc9147;box-shadow:0 0 0 5px #070d16,0 16px 60px #0009;padding:22px 26px;font:15px/1.65 system-ui,sans-serif}
+.cbw3-dialog h2{margin:.2em 0;color:#ffcc6c;font:700 clamp(15px,2vw,23px) 'Press Start 2P',monospace;line-height:1.6}
+.cbw3-dialog h3{font:700 12px 'Press Start 2P',monospace;color:#69ecdc;line-height:1.8}
+.cbw3-dialog small,.cbw3-help{display:block;color:#a2bfd3;font-size:12px}
+.cbw3-header,.cbw3-line,.cbw3-actions{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.cbw3-header{border-bottom:2px solid #a88340;padding-bottom:12px}.cbw3-info{color:#ffc869}
+.cbw3-dialog button{border:1px solid #d6ad5c;color:#f2d495;background:#192f46;padding:10px 12px;cursor:pointer;font-weight:700}
+.cbw3-dialog button:disabled{opacity:.45;cursor:not-allowed}.cbw3-dialog a{color:#6bdde3;overflow-wrap:anywhere}
+.cbw3-line{background:#0b192b;padding:14px;margin:15px 0}.cbw3-badge{border:1px solid #385a6b;background:#10263a;padding:14px;margin:10px 0;display:grid;gap:12px}
+.cbw3-demo{border:2px solid #a88340;padding:15px;margin-top:18px;background:#1d2237}
+.cbw3-success{color:#77ffcc}.cbw3-warning,.cbw3-error{color:#ffc0ad}.cbw3-error{border:1px solid #b84355;padding:12px}.cbw3-notice{color:#8fe6d6}
+@media (max-width:620px){.cbw3-dialog{padding:14px}.cbw3-launch{font-size:8px;right:8px;bottom:8px}.cbw3-dialog h2{font-size:14px}}

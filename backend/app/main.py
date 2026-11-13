@@ -18,6 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from typing import Literal
 
 from .auth import current_user_id
+from .web3_achievements import router as web3_router
 from .config import get_settings
 from .db import make_pool
 from .grading import MANIFEST, get_lesson, grade_attempt, level_from_xp, prepare_questions, prerequisites
@@ -58,6 +59,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="CampusBounty Progression API", version="4.6.0", lifespan=lifespan)
+app.include_router(web3_router)
 # Set explicit origins, never wildcard for authenticated calls.
 app.add_middleware(
     CORSMiddleware,
