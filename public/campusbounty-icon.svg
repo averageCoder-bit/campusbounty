@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" shape-rendering="crispEdges" role="img" aria-labelledby="title desc">
+  <title id="title">CampusBounty favicon</title>
+  <desc id="desc">An eight-bit golden B badge with teal accents on a transparent background.</desc>
+
+  <!-- Stepped gold badge silhouette and dark inset -->
+  <path d="M16 6H48V10H54V16H58V48H54V54H48V58H16V54H10V48H6V16H10V10H16Z" fill="#6C421B" />
+  <path d="M16 4H48V8H54V14H58V20H60V44H58V50H54V56H48V60H16V56H10V50H6V44H4V20H6V14H10V8H16Z" fill="#F3A91C" />
+  <path d="M16 10H48V14H52V18H54V46H52V50H48V54H16V50H12V46H10V18H12V14H16Z" fill="#092139" />
+  <path d="M16 10H48V14H16ZM12 14H16V18H12ZM10 18H14V46H10Z" fill="#37DAD1" opacity="0.65" />
+
+  <!-- Pixel B: strong silhouette with two distinct counters -->
+  <rect x="20" y="16" width="7" height="32" fill="#FFC83D"/>
+  <rect x="27" y="16" width="11" height="6" fill="#FFC83D"/>
+  <rect x="27" y="29" width="11" height="6" fill="#FFC83D"/>
+  <rect x="27" y="42" width="11" height="6" fill="#FFC83D"/>
+  <rect x="38" y="20" width="6" height="12" fill="#FFC83D"/>
+  <rect x="38" y="34" width="6" height="10" fill="#FFC83D"/>
+  <rect x="27" y="22" width="11" height="7" fill="#092139"/>
+  <rect x="27" y="35" width="11" height="7" fill="#092139"/>
+  <rect x="40" y="28" width="4" height="4" fill="#E48A15" />
+  <rect x="40" y="40" width="4" height="4" fill="#E48A15" />
+
+  <!-- Tiny teal pixel accent -->
+  <rect x="46" y="10" width="4" height="4" fill="#55E7DD" />
+</svg>
