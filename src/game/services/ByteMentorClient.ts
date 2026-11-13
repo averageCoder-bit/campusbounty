@@ -1,6 +1,8 @@
 /** G5: Byte's *advisory* study chat. Never awards XP, evaluates assessments,
  * opens wallets or changes server state. Gemini credentials live on FastAPI.
  */
+import { supabase } from "./ProgressionClient";
+
 export type MentorRole = "user" | "model";
 export interface MentorTurn {
     role: MentorRole;
@@ -32,17 +34,29 @@ export async function askByte(
 ): Promise<MentorReply> {
     if (!API_URL)
         throw new Error(
-            "Byte API is not configured. Set VITE_BYTE_API_URL in .env.local.",
+            "Byte API is not configured. Set VITE_BYTE_API_URL in .env.local or Vercel.",
         );
     const text = message.trim();
     if (!text || text.length > 450)
         throw new Error("Ask Byte a question under 450 characters.");
+
+    if (!supabase) {
+        throw new Error("CampusBounty sign-in is not configured.");
+    }
+    const { data, error: authError } = await supabase.auth.getSession();
+    if (authError || !data.session?.access_token) {
+        throw new Error("Sign in to CampusBounty to use Byte AI.");
+    }
+
     let response: Response;
     try {
         response = await fetch(`${API_URL}/api/v1/byte/chat`, {
             method: "POST",
             signal,
-            headers: { "Content-Type": "application/json" },
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${data.session.access_token}`,
+            },
             body: JSON.stringify({
                 message: text,
                 history: history.slice(-6),
@@ -51,9 +65,7 @@ export async function askByte(
         });
     } catch (error) {
         if (signal?.aborted) throw error;
-        throw new Error(
-            "Byte can't reach the local mentor server. Check port 8001.",
-        );
+        throw new Error("Byte can't reach the mentor server. Try again later.");
     }
     if (!response.ok) {
         const errorBody: { detail?: unknown } = await response
@@ -62,24 +74,26 @@ export async function askByte(
         throw new Error(
             typeof errorBody.detail === "string"
                 ? errorBody.detail
-                : `Byte's mentor server returned ${response.status}`,
+                : response.status === 401 || response.status === 403
+                    ? "Your sign-in has expired or isn't authorized. Sign in again."
+                    : `Byte's mentor server returned ${response.status}`,
         );
     }
-    const data = (await response.json()) as MentorReply;
+    const result = (await response.json()) as MentorReply;
     if (
-        !data ||
-        typeof data.reply !== "string" ||
-        (data.source !== "gemini" && data.source !== "scripted")
+        !result ||
+        typeof result.reply !== "string" ||
+        (result.source !== "gemini" && result.source !== "scripted")
     ) {
         throw new Error("Byte returned an invalid response.");
     }
     return {
-        reply: data.reply.slice(0, 1200),
-        source: data.source,
+        reply: result.reply.slice(0, 1200),
+        source: result.source,
         awards_rewards: false,
         notice:
-            typeof data.notice === "string"
-                ? data.notice.slice(0, 200)
+            typeof result.notice === "string"
+                ? result.notice.slice(0, 200)
                 : undefined,
     };
 }

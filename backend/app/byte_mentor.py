@@ -1,4 +1,4 @@
-"""CampusBounty G5: Byte AI mentor (developer-only while identity is undecided).
+"""CampusBounty G5: Authenticated Byte AI study mentor.
 
 No XP, coins, grades or unlocks can be changed through this router.
 When GEMINI_API_KEY is absent Byte provides honest, scripted study guidance.
@@ -12,8 +12,11 @@ import os
 import time
 from typing import Literal
 
+from fastapi import Depends
+from .auth import current_user_id
+
 import httpx
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
 router = APIRouter(prefix="/api/v1/byte", tags=["Byte Mentor"])
@@ -42,8 +45,8 @@ class MessageOut(BaseModel):
     awards_rewards: bool = False
     notice: str | None = None  # Explicitly disclose temporary scripted fallback
 
-# Process-local limits are only a convenience for local development, not a
-# substitute for authentication, durable quotas, or production rate limiting.
+# Best-effort process-local throttle; NOT a durable quota in serverless.
+# Add edge/centralized rate limiting and Gemini provider quotas before public launch.
 _calls: dict[str, deque[float]] = defaultdict(deque)
 _in_flight = asyncio.Semaphore(2)
 
@@ -84,21 +87,10 @@ SAFETY AND GAME RULES:
 """
 
 
-def check_dev_access(request: Request) -> None:
-    if os.getenv("BYTE_DEV_MODE", "").lower() != "true":
-        raise HTTPException(503, "Byte AI is disabled until authentication is configured")
-    addr = request.client.host if request.client else ""
-    if addr not in {"127.0.0.1", "::1", "localhost", "testclient"}:
-        raise HTTPException(403, "Byte AI local-development mode only")
-    # Origin is helpful against accidental website use, but is NOT authentication.
-    origin = request.headers.get("origin")
-    origins = {"http://localhost:8080", "http://127.0.0.1:8080",
-               "http://localhost:5173", "http://127.0.0.1:5173"}
-    origins.update(x.strip() for x in os.getenv("BYTE_DEV_ORIGINS", "").split(",") if x.strip())
-    if origin and origin not in origins:
-        raise HTTPException(403, "Disallowed developer origin")
+def check_user_rate_limit(user_id: str) -> None:
+    """Best-effort per-user throttle (NOT a durable serverless quota)."""
     now = time.monotonic()
-    hits = _calls[addr]
+    hits = _calls[str(user_id)]
     while hits and now - hits[0] > 60:
         hits.popleft()
     if len(hits) >= 12:
@@ -182,14 +174,13 @@ async def gemini_reply(body: MessageIn, api_key: str, model: str) -> str:
 
 
 @router.get("/status")
-async def status(request: Request) -> dict[str, str]:
-    check_dev_access(request)
+async def status(_user_id: str = Depends(current_user_id)) -> dict[str, str]:
     return {"mode": "gemini" if os.getenv("GEMINI_API_KEY") else "scripted", "rewards": "disabled"}
 
 
 @router.post("/chat", response_model=MessageOut)
-async def chat(body: MessageIn, request: Request) -> MessageOut:
-    check_dev_access(request)
+async def chat(body: MessageIn, user_id: str = Depends(current_user_id)) -> MessageOut:
+    check_user_rate_limit(user_id)
     key = os.getenv("GEMINI_API_KEY", "").strip()
     if not key:
         return MessageOut(reply=scripted_reply(body.message, body.context), source="scripted")
