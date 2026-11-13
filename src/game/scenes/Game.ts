@@ -13,6 +13,7 @@ import { QuestHallInteractionBridge } from "../ui/QuestHallInteractionBridge";
 import { QuestBoardUI } from "../ui/QuestBoardUI";
 import { AdventurePortalUI } from "../ui/AdventurePortalUI";
 import { getGameSession } from "../data/GameSession";
+import { launchPresentationDemo } from "./PresentationDemoLauncher";
 
 /**
  * CampusBounty — Quest Hall
@@ -269,8 +270,11 @@ export class Game extends Phaser.Scene {
         // while a full React panel is open. Existing ESC MenuOverlay is unchanged.
         this.questHallBridge = new QuestHallInteractionBridge(this, {
             playerSprite: this.player?.sprite,
-            canOpen: () => !this.menuOverlay?.isOpen && !this.byteDialogue?.isOpen &&
-                !this.questBoardUI?.isOpen && !this.adventurePortalUI?.isOpen,
+            canOpen: () =>
+                !this.menuOverlay?.isOpen &&
+                !this.byteDialogue?.isOpen &&
+                !this.questBoardUI?.isOpen &&
+                !this.adventurePortalUI?.isOpen,
             onModalChanged: (open) => {
                 controlsHint.setVisible(!open);
                 if (open) {
@@ -280,13 +284,15 @@ export class Game extends Phaser.Scene {
                     this.mouseLead?.setEnabled(false);
                 } else {
                     this.physics.world.resume();
-                    this.mouseLead?.setEnabled(!this.menuOverlay?.isOpen &&
-                        !this.questBoardUI?.isOpen && !this.adventurePortalUI?.isOpen);
+                    this.mouseLead?.setEnabled(
+                        !this.menuOverlay?.isOpen &&
+                            !this.questBoardUI?.isOpen &&
+                            !this.adventurePortalUI?.isOpen,
+                    );
                 }
             },
         });
         worldCamera.ignore(this.questHallBridge.getCameraObjects());
-
 
         // ==========================================
         // 11. QUEST BOARD LEARNING HUB
@@ -321,6 +327,7 @@ export class Game extends Phaser.Scene {
         // ==========================================
 
         this.adventurePortalUI = new AdventurePortalUI(this, {
+            onLaunchDemo: (mode) => launchPresentationDemo(this, mode),
             onOpenChanged: (open: boolean) => {
                 controlsHint.setVisible(
                     !open &&

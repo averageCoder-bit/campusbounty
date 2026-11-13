@@ -6,12 +6,14 @@ export type AdventureModeId = "quest-finding" | "dungeon-conquer" | "afk-farm";
 export interface AdventurePortalUIOptions {
     onOpenChanged?: (open: boolean) => void;
     onLaunch?: (mode: AdventureModeId) => void;
+    /** Optional presentation-only launch. Existing normal onLaunch is unchanged. */
+    onLaunchDemo?: (mode: Exclude<AdventureModeId, "afk-farm">) => void;
     availableModes?: readonly AdventureModeId[];
 }
 
 const FONT = '"Press Start 2P", monospace';
 const BODY_FONT = '"VT323", "Trebuchet MS", monospace';
-
+const DEMO_MODE = import.meta.env.VITE_DEMO_MODE === "true";
 const C = {
     black: 0x020611,
     navy: 0x0b1423,
@@ -121,6 +123,7 @@ export class AdventurePortalUI {
     private readonly infoLearning: Phaser.GameObjects.Text;
     private readonly comingSoon: Phaser.GameObjects.Text;
     private readonly playElements: Phaser.GameObjects.GameObject[];
+    private readonly demoElements: Phaser.GameObjects.GameObject[];
 
     private selected: AdventureModeId = "quest-finding";
     private opened = false;
@@ -239,14 +242,19 @@ export class AdventurePortalUI {
             "#94A3B8",
         ).setOrigin(0.5);
 
+        // When disabled (or unwired), reproduce the original portal EXACTLY.
+        const hasDemoLaunch = DEMO_MODE && Boolean(this.options.onLaunchDemo);
         this.playElements = this.makeButton(
             702,
             606,
-            196,
+            hasDemoLaunch ? 96 : 196,
             46,
-            "PLAY QUEST",
+            hasDemoLaunch ? "PLAY" : "PLAY QUEST",
             () => this.launch(),
         );
+        this.demoElements = hasDemoLaunch
+            ? this.makeButton(802, 606, 96, 46, "DEMO", () => this.launchDemo(), 8)
+            : [];
         this.refreshSelection();
 
         scene.input.keyboard?.on("keydown", this.keyDown);
@@ -288,6 +296,17 @@ export class AdventurePortalUI {
         );
     }
 
+    private isDemoAvailable(
+        mode: AdventureModeId,
+    ): mode is Exclude<AdventureModeId, "afk-farm"> {
+        return Boolean(
+            DEMO_MODE &&
+            this.options.onLaunchDemo &&
+            mode !== "afk-farm" &&
+            this.options.availableModes?.includes(mode),
+        );
+    }
+
     private select(mode: AdventureModeId): void {
         if (this.selected === mode) return;
         this.selected = mode;
@@ -320,6 +339,20 @@ export class AdventurePortalUI {
                 }
             ).setVisible(available);
         }
+        for (const object of this.demoElements) {
+            (
+                object as Phaser.GameObjects.GameObject & {
+                    setVisible: (v: boolean) => unknown;
+                }
+            ).setVisible(this.isDemoAvailable(this.selected));
+        }
+    }
+
+    private launchDemo(): void {
+        if (!this.opened || !this.isDemoAvailable(this.selected)) return;
+        const chosen = this.selected;
+        this.close();
+        this.options.onLaunchDemo?.(chosen);
     }
 
     private launch(): void {
